@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <defs>
+  <linearGradient id="shirtb" x1="0" x2="1" y1="0" y2="0">
+    <stop offset="0" stop-color="#d9d9d9"/>
+    <stop offset=".18" stop-color="#f4f4f4"/>
+    <stop offset=".42" stop-color="#ffffff"/>
+    <stop offset=".72" stop-color="#f3f3f3"/>
+    <stop offset="1" stop-color="#cfcfcf"/>
+  </linearGradient></defs>
+  
+  <path d="M365 118 Q500 190 635 118 L805 178 L960 335 L850 455 L762 392 L762 925 Q762 952 735 952 L265 952 Q238 952 238 925 L238 392 L150 455 L40 335 L195 178 Z" fill="url(#shirtb)" stroke="#c6c6c6" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M365 118 Q500 160 635 118" fill="none" stroke="#c4c4c4" stroke-width="12" stroke-linecap="round"/>
+  <rect x="478" y="140" width="44" height="26" rx="4" fill="#d8d8d8"/>
+  <path d="M500 175 L500 930" stroke="#e1e1e1" stroke-width="4" opacity=".6"/>
+  <path d="M238 392 L238 300" stroke="#d2d2d2" stroke-width="5" opacity=".7"/>
+  <path d="M762 392 L762 300" stroke="#d2d2d2" stroke-width="5" opacity=".7"/>
+  <path d="M245 915 L755 915" stroke="#d6d6d6" stroke-width="5"/>
+</svg>

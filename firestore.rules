@@ -1,0 +1,60 @@
+rules_version = '2';
+
+// Regras do Firestore — Studio Personalizado
+// Admin = usuário autenticado com documento em admins/{uid}.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Catálogo público (leitura) — escrita só do admin
+    match /settings/{doc} { allow read: if true; allow write: if isAdmin(); }
+    match /products/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /arts/{id}     { allow read: if true; allow write: if isAdmin(); }
+    match /fonts/{id}    { allow read: if true; allow write: if isAdmin(); }
+
+    // Lista de administradores: cada usuário só lê o próprio documento.
+    // Crie os documentos pelo Console do Firebase.
+    match /admins/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Contador diário do número do pedido (só pode avançar de 1 em 1)
+    match /counters/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.seq == 1001
+        && request.resource.data.keys().hasOnly(['seq', 'updated_at']);
+      allow update: if request.resource.data.seq == resource.data.seq + 1
+        && request.resource.data.keys().hasOnly(['seq', 'updated_at']);
+      allow delete: if isAdmin();
+    }
+
+    // Pedidos: qualquer cliente cria; só o admin lê, altera e exclui.
+    match /orders/{id} {
+      allow read, update, delete: if isAdmin();
+      allow create: if validNewOrder(id);
+    }
+
+    function validNewOrder(id) {
+      let d = request.resource.data;
+      return d.numero_pedido == id
+        && d.status_pagamento == 'PENDENTE'
+        && d.status_producao in ['AGUARDANDO_PAGAMENTO', 'EM_FILA']
+        && d.modalidade in ['EVENTO', 'ENCOMENDA']
+        && d.metodo_pagamento in ['CREDITO', 'DEBITO', 'PIX', 'PAGAR_NA_RETIRADA']
+        && d.itens is list && d.itens.size() > 0 && d.itens.size() <= 50
+        && d.cliente.nome is string && d.cliente.nome.size() >= 3 && d.cliente.nome.size() <= 120
+        && d.cliente.email is string && d.cliente.email.size() <= 160
+        && d.cliente.telefone is string && d.cliente.telefone.size() <= 13
+        && (d.modalidade == 'EVENTO' || d.cliente.endereco is map)
+        && d.valor_total is number && d.valor_total >= 0
+        && d.notificacoes.email_enviado == false
+        && d.notificacoes.mensagem_enviada == false
+        && !('alerta_valor' in d);
+    }
+  }
+}

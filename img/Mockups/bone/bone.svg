@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1000" viewBox="0 0 1000 1000">
+  <defs><radialGradient id="crown" cx=".45" cy=".35" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".65" stop-color="#ededed"/><stop offset="1" stop-color="#cdcdcd"/></radialGradient>
+     <linearGradient id="bill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#d6d6d6"/><stop offset="1" stop-color="#b9b9b9"/></linearGradient></defs>
+  
+  <ellipse cx="500" cy="805" rx="330" ry="30" fill="#000" opacity=".1"/>
+  <path d="M215 610 C215 300 360 215 500 215 C640 215 785 300 785 610 Z" fill="url(#crown)" stroke="#c2c2c2" stroke-width="5"/>
+  <path d="M500 220 C470 330 465 470 470 610" fill="none" stroke="#d0d0d0" stroke-width="5"/>
+  <path d="M500 220 C530 330 535 470 530 610" fill="none" stroke="#d0d0d0" stroke-width="5"/>
+  <path d="M500 220 C380 280 300 420 280 610" fill="none" stroke="#dadada" stroke-width="4"/>
+  <path d="M500 220 C620 280 700 420 720 610" fill="none" stroke="#dadada" stroke-width="4"/>
+  <circle cx="500" cy="222" r="20" fill="#d4d4d4" stroke="#bdbdbd" stroke-width="4"/>
+  <path d="M175 610 Q500 545 825 610 Q875 705 770 770 Q500 705 230 770 Q125 705 175 610 Z" fill="url(#bill)" stroke="#a9a9a9" stroke-width="5"/>
+  <path d="M215 640 Q500 590 785 640" fill="none" stroke="#c4c4c4" stroke-width="4" stroke-dasharray="10 8"/>
+</svg>

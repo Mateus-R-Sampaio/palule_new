@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#171a25" />
+  <meta name="description" content="Personalize copos, camisetas, ecobags e bonés em tempo real." />
+  <title>Studio Personalizado</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="client">
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+
+  <header class="topbar">
+    <button class="brand" id="brandHome" type="button" aria-label="Voltar ao início">
+      <span class="brand-mark" id="brandMark" aria-hidden="true">SP</span>
+      <img class="brand-logo" id="brandLogo" alt="" hidden />
+      <span class="brand-text">
+        <strong id="brandName">Studio</strong>
+        <small id="brandSubtitle">Personalizado</small>
+      </span>
+    </button>
+
+    <nav class="stepper" aria-label="Etapas do pedido">
+      <ol id="stepper">
+        <li data-step="catalog"><button type="button"><span class="step-num">1</span><span class="step-label">Produto</span></button></li>
+        <li data-step="editor"><button type="button"><span class="step-num">2</span><span class="step-label">Personalizar</span></button></li>
+        <li data-step="cart"><button type="button"><span class="step-num">3</span><span class="step-label">Carrinho</span></button></li>
+        <li data-step="customer"><button type="button"><span class="step-num">4</span><span class="step-label">Dados</span></button></li>
+        <li data-step="checkout"><button type="button"><span class="step-num">5</span><span class="step-label">Pagamento</span></button></li>
+      </ol>
+    </nav>
+
+    <button class="cart-button" id="cartButton" type="button" aria-controls="cartPanel" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h15l-1.5 9h-12L6 6Zm0 0L5 3H2m6 17a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm10 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="sr-only">Carrinho:</span>
+      <span class="cart-count" id="cartCount">0</span>
+    </button>
+  </header>
+
+  <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+
+  <main id="main">
+    <!-- ============ 1. Catálogo ============ -->
+    <section class="step-view" id="catalog" aria-labelledby="catalogTitle">
+      <div class="view-head">
+        <h1 id="catalogTitle" tabindex="-1">Escolha o produto</h1>
+        <p class="lead">Toque em um produto para personalizar com estampa, texto e cores.</p>
+      </div>
+      <div class="product-grid" id="productGrid" aria-busy="true">
+        <div class="product-card skeleton"></div>
+        <div class="product-card skeleton"></div>
+        <div class="product-card skeleton"></div>
+        <div class="product-card skeleton"></div>
+      </div>
+    </section>
+
+    <!-- ============ 2. Editor ============ -->
+    <section class="step-view" id="editor" aria-labelledby="editorTitle" hidden>
+      <div class="editor-layout">
+        <div class="stage-column">
+          <div class="stage-toolbar">
+            <div class="segmented" id="sideToggle" role="group" aria-label="Lado do produto">
+              <button type="button" data-side="front" aria-pressed="true">Frente</button>
+              <button type="button" data-side="back" aria-pressed="false">Costas</button>
+            </div>
+            <span class="finish-badge" id="finishBadge" hidden></span>
+          </div>
+          <div class="stage-wrap" id="stageWrap" aria-label="Prévia do produto"></div>
+          <p class="dimension-readout" id="dimensionReadout" aria-live="polite"></p>
+          <div class="stage-tools">
+            <button type="button" class="btn btn-ghost btn-sm" id="resetArtPosition">Centralizar estampa</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="resetCustomNamePosition">Centralizar texto</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="rotateReset">Zerar rotação</button>
+            <button type="button" class="btn btn-ghost btn-sm danger" id="removeSelected">Remover selecionado</button>
+          </div>
+          <p class="hint">Arraste para mover · cantos para redimensionar · alça de cima para girar (segure Shift para girar de 15° em 15°).</p>
+        </div>
+
+        <div class="controls-column">
+          <div class="editor-heading">
+            <div>
+              <h1 id="editorTitle" tabindex="-1"><span id="editorProductName">Produto</span></h1>
+              <p class="muted" id="editorProductDesc"></p>
+            </div>
+            <strong class="price" id="editorPrice">R$ 0,00</strong>
+          </div>
+
+          <fieldset class="control-group" id="colorGroup">
+            <legend>Cor do produto</legend>
+            <div class="swatches" id="colorOptions"></div>
+          </fieldset>
+
+          <fieldset class="control-group" id="sizeGroup">
+            <legend>Tamanho <span class="required" aria-hidden="true">*</span></legend>
+            <div class="chips" id="sizeOptions"></div>
+          </fieldset>
+
+          <fieldset class="control-group" id="finishGroup" hidden>
+            <legend>Acabamento <span class="required" aria-hidden="true">*</span></legend>
+            <div class="option-cards" id="finishOptions"></div>
+          </fieldset>
+
+          <section class="control-group">
+            <div class="group-head">
+              <h2>Estampa</h2>
+              <button type="button" class="btn btn-ghost btn-sm" id="artToggle" aria-expanded="true" aria-controls="artListPanel">Ocultar</button>
+            </div>
+            <div class="art-panel" id="artListPanel">
+              <div class="chips chips-sm" id="artCategories" role="group" aria-label="Categorias de estampa"></div>
+              <div class="art-grid" id="artList"></div>
+            </div>
+          </section>
+
+          <section class="control-group custom-name-field">
+            <div class="group-head">
+              <h2><label for="customProductName">Texto personalizado</label></h2>
+              <span class="counter" id="customNameCounter">0/24</span>
+            </div>
+            <input type="text" id="customProductName" maxlength="24" autocomplete="off" placeholder="Ex.: seu nome" enterkeyhint="done" />
+
+            <div class="field-row">
+              <span class="field-label">Tipografia</span>
+              <button type="button" class="font-select" id="fontPickerButton" aria-haspopup="dialog">
+                <span class="font-select-name" id="fontPickerName">Montserrat</span>
+                <span class="font-select-source" id="fontPickerSource">Google</span>
+              </button>
+            </div>
+
+            <div class="field-row">
+              <span class="field-label">Estilo</span>
+              <div class="segmented segmented-sm" role="group" aria-label="Estilo do texto">
+                <button type="button" id="textBold" aria-pressed="false"><b>N</b><span class="sr-only">Negrito</span></button>
+                <button type="button" id="textItalic" aria-pressed="false"><i>I</i><span class="sr-only">Itálico</span></button>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <span class="field-label" id="textColorLabel">Cor da letra</span>
+              <div class="swatches swatches-sm" id="textColorOptions" role="group" aria-labelledby="textColorLabel"></div>
+              <label class="color-picker" title="Escolher outra cor">
+                <input type="color" id="textColorPicker" value="#171a25" />
+                <span class="sr-only">Escolher outra cor</span>
+              </label>
+            </div>
+            <p class="hint" id="engraveHint" hidden>Na gravação a laser o texto e a estampa saem em tom metálico; a cor da letra não se aplica.</p>
+
+            <div class="field-row">
+              <label class="field-label" for="textSizeRange">Tamanho</label>
+              <input type="range" id="textSizeRange" min="0.3" max="10" step="0.1" value="1.5" />
+              <output id="textSizeOutput" for="textSizeRange">1,5 cm</output>
+            </div>
+          </section>
+
+          <div class="quantity-row">
+            <span class="field-label">Quantidade</span>
+            <div class="stepper-input">
+              <button type="button" id="qtyMinus" aria-label="Diminuir quantidade">−</button>
+              <output id="qtyValue">1</output>
+              <button type="button" id="qtyPlus" aria-label="Aumentar quantidade">+</button>
+            </div>
+          </div>
+
+          <div class="actions sticky-actions">
+            <button type="button" class="btn btn-ghost" data-go="catalog">Voltar</button>
+            <button type="button" class="btn btn-primary" id="addToCart">Adicionar ao carrinho</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 3. Carrinho ============ -->
+    <section class="step-view" id="cart" aria-labelledby="cartTitle" hidden>
+      <div class="view-head">
+        <h1 id="cartTitle" tabindex="-1">Revise seu carrinho</h1>
+        <p class="lead">Confira a prévia de frente e costas antes de continuar.</p>
+      </div>
+      <div class="cart-review" id="cartReviewList"></div>
+      <div class="summary-bar">
+        <div><span class="muted">Total</span> <strong id="cartTotal">R$ 0,00</strong></div>
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" data-go="catalog">Adicionar outro produto</button>
+          <button type="button" class="btn btn-primary" data-go="customer" id="cartContinue">Continuar</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 4. Dados do cliente ============ -->
+    <section class="step-view" id="customer" aria-labelledby="customerTitle" hidden>
+      <div class="view-head">
+        <h1 id="customerTitle" tabindex="-1">Seus dados</h1>
+        <p class="lead">Usamos estes dados para avisar sobre o andamento do pedido.</p>
+      </div>
+      <form class="form-card" id="customerForm" novalidate>
+        <fieldset class="mode-selector" id="modeSelector">
+          <legend>Como você vai receber?</legend>
+          <div class="option-cards option-cards-2">
+            <label class="option-card">
+              <input type="radio" name="modalidade" value="EVENTO" />
+              <span class="option-title">Evento</span>
+              <span class="option-desc">Retirada no local · sem endereço</span>
+            </label>
+            <label class="option-card">
+              <input type="radio" name="modalidade" value="ENCOMENDA" />
+              <span class="option-title">Encomenda</span>
+              <span class="option-desc">Entrega no seu endereço</span>
+            </label>
+          </div>
+          <p class="field-error" data-error-for="modalidade"></p>
+        </fieldset>
+
+        <div class="form-grid">
+          <div class="field span-2">
+            <label for="customerName">Nome completo</label>
+            <input id="customerName" name="nome" autocomplete="name" required minlength="3" enterkeyhint="next" />
+            <p class="field-error" data-error-for="nome"></p>
+          </div>
+          <div class="field">
+            <label for="customerPhone">WhatsApp</label>
+            <input id="customerPhone" name="telefone" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="(11) 99999-9999" required enterkeyhint="next" />
+            <p class="field-error" data-error-for="telefone"></p>
+          </div>
+          <div class="field">
+            <label for="customerEmail">E-mail</label>
+            <input id="customerEmail" name="email" type="email" autocomplete="email" placeholder="voce@email.com" required enterkeyhint="next" />
+            <p class="field-error" data-error-for="email"></p>
+          </div>
+        </div>
+
+        <fieldset class="address-fields" id="addressFields" hidden>
+          <legend>Endereço de entrega</legend>
+          <div class="form-grid form-grid-6">
+            <div class="field span-2">
+              <label for="addrCep">CEP</label>
+              <input id="addrCep" name="cep" inputmode="numeric" data-vk="numeric" autocomplete="postal-code" placeholder="00000-000" />
+              <p class="field-hint" id="cepHint"></p>
+              <p class="field-error" data-error-for="cep"></p>
+            </div>
+            <div class="field span-4">
+              <label for="addrRua">Rua / Logradouro</label>
+              <input id="addrRua" name="rua" autocomplete="address-line1" />
+              <p class="field-error" data-error-for="rua"></p>
+            </div>
+            <div class="field span-2">
+              <label for="addrNumero">Número</label>
+              <input id="addrNumero" name="numero" inputmode="numeric" data-vk="numeric" />
+              <p class="field-error" data-error-for="numero"></p>
+            </div>
+            <div class="field span-4">
+              <label for="addrComplemento">Complemento <span class="muted">(opcional)</span></label>
+              <input id="addrComplemento" name="complemento" autocomplete="address-line2" />
+            </div>
+            <div class="field span-2">
+              <label for="addrBairro">Bairro</label>
+              <input id="addrBairro" name="bairro" />
+              <p class="field-error" data-error-for="bairro"></p>
+            </div>
+            <div class="field span-3">
+              <label for="addrCidade">Cidade</label>
+              <input id="addrCidade" name="cidade" autocomplete="address-level2" />
+              <p class="field-error" data-error-for="cidade"></p>
+            </div>
+            <div class="field span-1">
+              <label for="addrEstado">UF</label>
+              <select id="addrEstado" name="estado" autocomplete="address-level1"></select>
+              <p class="field-error" data-error-for="estado"></p>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="button" class="btn btn-ghost" data-go="cart">Voltar</button>
+          <button type="submit" class="btn btn-primary">Ir para pagamento</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ 5. Pagamento ============ -->
+    <section class="step-view" id="checkout" aria-labelledby="checkoutTitle" hidden>
+      <div class="view-head">
+        <h1 id="checkoutTitle" tabindex="-1">Pagamento</h1>
+        <p class="lead">Escolha como prefere pagar.</p>
+      </div>
+      <div class="checkout-layout">
+        <div class="form-card">
+          <fieldset>
+            <legend class="sr-only">Método de pagamento</legend>
+            <div class="option-cards payment-options" id="paymentOptions"></div>
+          </fieldset>
+          <p class="hint" id="paymentHint"></p>
+          <div class="notice notice-warning" id="offlineNotice" hidden role="alert">
+            Você está sem conexão. Reconecte para confirmar o pedido.
+          </div>
+          <div class="actions">
+            <button type="button" class="btn btn-ghost" data-go="customer">Voltar</button>
+            <button type="button" class="btn btn-primary" id="confirmOrder">Confirmar pedido</button>
+          </div>
+        </div>
+        <aside class="form-card order-summary" id="checkoutSummary" aria-label="Resumo do pedido"></aside>
+      </div>
+    </section>
+
+    <!-- ============ Confirmação ============ -->
+    <section class="step-view" id="success" aria-labelledby="successTitle" hidden>
+      <div class="success-card">
+        <div class="success-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="m5 12.5 4.2 4.2L19 7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <h1 id="successTitle" tabindex="-1">Pedido confirmado!</h1>
+        <p class="muted">Guarde o número do seu pedido:</p>
+        <p class="order-code" id="successCode">#0000</p>
+        <p class="order-number" id="successNumber"></p>
+        <button type="button" class="btn btn-ghost btn-sm" id="copyOrderNumber">Copiar número do pedido</button>
+
+        <dl class="success-details">
+          <div><dt>Status</dt><dd id="successStatus">—</dd></div>
+          <div><dt>Pagamento</dt><dd id="successPayment">—</dd></div>
+          <div><dt>Modalidade</dt><dd id="successMode">—</dd></div>
+          <div><dt>Total</dt><dd id="successTotal">—</dd></div>
+        </dl>
+
+        <div class="pix-box" id="pixBox" hidden>
+          <h2>Pague com Pix</h2>
+          <div class="pix-qr" id="pixQr"></div>
+          <label class="sr-only" for="pixCode">Código Pix copia e cola</label>
+          <textarea id="pixCode" rows="3" readonly></textarea>
+          <button type="button" class="btn btn-ghost btn-sm" id="copyPix">Copiar código Pix</button>
+        </div>
+
+        <p class="notice" id="successNotice"></p>
+
+        <div class="auto-reset" id="autoReset" hidden>
+          <div class="auto-reset-bar"><span id="autoResetBar"></span></div>
+          <p class="muted"><span id="autoResetText">Nova sessão em 30 s</span> · <button type="button" class="link-button" id="pauseReset">Manter esta tela</button></p>
+        </div>
+
+        <button type="button" class="btn btn-primary" id="newOrder">Fazer novo pedido</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Carrinho lateral -->
+  <div class="drawer-backdrop" id="cartBackdrop" hidden></div>
+  <aside class="drawer" id="cartPanel" aria-labelledby="cartPanelTitle" aria-hidden="true" inert>
+    <div class="drawer-head">
+      <h2 id="cartPanelTitle">Carrinho</h2>
+      <button type="button" class="icon-button" id="closeCart" aria-label="Fechar carrinho">✕</button>
+    </div>
+    <div class="drawer-body" id="cartPanelList"></div>
+    <div class="drawer-foot">
+      <div class="drawer-total"><span>Total</span><strong id="cartPanelTotal">R$ 0,00</strong></div>
+      <button type="button" class="btn btn-primary btn-block" id="cartPanelReview">Revisar e finalizar</button>
+    </div>
+  </aside>
+
+  <!-- Seletor de tipografia -->
+  <dialog class="modal font-modal" id="fontPicker" aria-labelledby="fontPickerTitle">
+    <div class="modal-head">
+      <h2 id="fontPickerTitle">Escolha a tipografia</h2>
+      <button type="button" class="icon-button" data-close aria-label="Fechar">✕</button>
+    </div>
+    <div class="font-filters">
+      <input type="search" id="fontSearch" placeholder="Buscar fonte…" aria-label="Buscar fonte" autocomplete="off" />
+      <div class="chips chips-sm" id="fontCategoryFilter" role="group" aria-label="Estilo"></div>
+      <div class="chips chips-sm" id="fontSourceFilter" role="group" aria-label="Banco de fontes"></div>
+    </div>
+    <div class="font-list" id="fontList" role="listbox" aria-label="Tipografias"></div>
+    <p class="modal-foot muted" id="fontCount"></p>
+  </dialog>
+
+  <!-- Aviso de inatividade (totem) -->
+  <dialog class="modal idle-modal" id="idleDialog" aria-labelledby="idleTitle">
+    <h2 id="idleTitle">Ainda está aí?</h2>
+    <p>A sessão será reiniciada em <strong id="idleCountdown">10</strong> s.</p>
+    <div class="actions">
+      <button type="button" class="btn btn-ghost" id="idleRestart">Reiniciar agora</button>
+      <button type="button" class="btn btn-primary" id="idleContinue">Continuar</button>
+    </div>
+  </dialog>
+
+  <div class="virtual-keyboard" id="virtualKeyboard" hidden aria-hidden="true"></div>
+  <div class="loading-overlay" id="loadingOverlay"><span class="spinner" aria-hidden="true"></span><span class="sr-only">Carregando…</span></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

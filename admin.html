@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#171a25" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Painel · Studio Personalizado</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body class="admin">
+  <!-- ============ Login ============ -->
+  <section class="login-view" id="loginView" hidden>
+    <form class="login-card" id="loginForm" novalidate>
+      <div class="login-brand">
+        <span class="brand-mark" aria-hidden="true">SP</span>
+        <div>
+          <h1>Painel administrativo</h1>
+          <p class="muted">Acesso restrito à equipe da loja.</p>
+        </div>
+      </div>
+      <div class="field">
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" type="email" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="loginPassword">Senha</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </div>
+      <p class="notice notice-danger" id="loginError" role="alert" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block" id="loginSubmit">Entrar</button>
+      <button type="button" class="link-button" id="forgotPassword" hidden>Esqueci minha senha</button>
+      <p class="notice" id="loginHint" hidden></p>
+      <a class="muted back-to-store" href="index.html">← Voltar para a loja</a>
+    </form>
+  </section>
+
+  <!-- ============ Painel ============ -->
+  <div class="admin-app" id="adminApp" hidden>
+    <header class="admin-topbar">
+      <div class="admin-brand">
+        <span class="brand-mark" id="adminBrandMark" aria-hidden="true">SP</span>
+        <img class="brand-logo" id="adminBrandLogo" alt="" hidden />
+        <div class="brand-text"><strong id="adminBrandName">Studio</strong><small>Painel</small></div>
+      </div>
+      <nav class="admin-tabs" role="tablist" aria-label="Seções do painel">
+        <button role="tab" type="button" data-tab="pedidos" id="tabbtn-pedidos" aria-controls="tab-pedidos">Pedidos <span class="tab-count" id="ordersBadge"></span></button>
+        <button role="tab" type="button" data-tab="catalogo" id="tabbtn-catalogo" aria-controls="tab-catalogo">Catálogo &amp; Mockups</button>
+        <button role="tab" type="button" data-tab="estampas" id="tabbtn-estampas" aria-controls="tab-estampas">Estampas</button>
+        <button role="tab" type="button" data-tab="tipografias" id="tabbtn-tipografias" aria-controls="tab-tipografias">Tipografias</button>
+        <button role="tab" type="button" data-tab="marca" id="tabbtn-marca" aria-controls="tab-marca">Marca &amp; Config.</button>
+      </nav>
+      <div class="admin-user">
+        <span class="mode-badge" id="modeBadge"></span>
+        <span class="user-email" id="userEmail"></span>
+        <a class="btn btn-ghost btn-sm on-dark" href="index.html" target="_blank" rel="noopener">Abrir loja</a>
+        <button type="button" class="btn btn-ghost btn-sm on-dark" id="logoutButton">Sair</button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <!-- ---------- Pedidos ---------- -->
+      <section class="tab-panel" id="tab-pedidos" role="tabpanel" aria-labelledby="tabbtn-pedidos">
+        <div class="panel-toolbar">
+          <input type="search" id="orderSearch" placeholder="Buscar por nº, nome, telefone…" aria-label="Buscar pedidos" />
+          <select id="orderModeFilter" aria-label="Filtrar por modalidade">
+            <option value="">Todas as modalidades</option>
+            <option value="EVENTO">Evento</option>
+            <option value="ENCOMENDA">Encomenda</option>
+          </select>
+          <label class="toggle"><input type="checkbox" id="orderSound" checked /> <span>Som de novo pedido</span></label>
+          <span class="muted live-dot" id="liveStatus">Tempo real</span>
+        </div>
+        <div class="kanban" id="kanban"></div>
+      </section>
+
+      <!-- ---------- Catálogo ---------- -->
+      <section class="tab-panel" id="tab-catalogo" role="tabpanel" aria-labelledby="tabbtn-catalogo" hidden>
+        <div class="panel-toolbar">
+          <h2>Produtos</h2>
+          <div class="spacer"></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="importDefaults" hidden>Importar catálogo padrão</button>
+          <button type="button" class="btn btn-primary btn-sm" id="newProduct">+ Novo produto</button>
+        </div>
+        <div class="admin-grid" id="productList"></div>
+      </section>
+
+      <!-- ---------- Estampas ---------- -->
+      <section class="tab-panel" id="tab-estampas" role="tabpanel" aria-labelledby="tabbtn-estampas" hidden>
+        <form class="admin-card upload-card" id="artUploadForm">
+          <h2>Enviar estampas</h2>
+          <p class="muted">PNG com fundo transparente, SVG ou WebP. Você pode selecionar vários arquivos de uma vez.</p>
+          <div class="upload-row">
+            <label class="dropzone" id="artDropzone">
+              <input type="file" id="artFiles" accept="image/png,image/svg+xml,image/webp" multiple />
+              <span><strong>Clique para escolher</strong> ou arraste os arquivos aqui</span>
+            </label>
+            <div class="field">
+              <label for="artCategory">Categoria</label>
+              <input id="artCategory" list="artCategoryList" placeholder="Ex.: Natureza" />
+              <datalist id="artCategoryList"></datalist>
+            </div>
+            <button type="submit" class="btn btn-primary" id="artUploadButton">Enviar</button>
+          </div>
+          <p class="muted" id="artUploadStatus" aria-live="polite"></p>
+        </form>
+        <div class="panel-toolbar">
+          <input type="search" id="artSearch" placeholder="Buscar estampa…" aria-label="Buscar estampa" />
+          <select id="artFilter" aria-label="Filtrar estampas">
+            <option value="">Todas</option>
+            <option value="active">Ativas</option>
+            <option value="inactive">Inativas</option>
+          </select>
+          <span class="muted" id="artCount"></span>
+        </div>
+        <div class="art-admin-grid" id="artAdminGrid"></div>
+      </section>
+
+      <!-- ---------- Tipografias ---------- -->
+      <section class="tab-panel" id="tab-tipografias" role="tabpanel" aria-labelledby="tabbtn-tipografias" hidden>
+        <div class="admin-columns">
+          <div class="admin-card">
+            <h2>Fontes próprias da loja</h2>
+            <p class="muted">Envie arquivos .woff2, .woff, .ttf ou .otf (verifique se a licença permite uso comercial).</p>
+            <form class="stack" id="fontUploadForm">
+              <div class="field">
+                <label for="fontFile">Arquivo da fonte</label>
+                <input type="file" id="fontFile" accept=".woff2,.woff,.ttf,.otf,font/woff2,font/woff,font/ttf,font/otf" required />
+              </div>
+              <div class="field">
+                <label for="fontFamily">Nome da fonte</label>
+                <input id="fontFamily" placeholder="Ex.: Minha Fonte Display" required />
+              </div>
+              <div class="field">
+                <label for="fontCategorySelect">Estilo</label>
+                <select id="fontCategorySelect"></select>
+              </div>
+              <button type="submit" class="btn btn-primary" id="fontUploadButton">Adicionar fonte</button>
+            </form>
+            <div class="custom-font-list" id="customFontList"></div>
+          </div>
+          <div class="admin-card">
+            <div class="card-head">
+              <h2>Banco de tipografias</h2>
+              <span class="muted" id="fontCatalogCount"></span>
+            </div>
+            <p class="muted">Escolha quais fontes aparecem para o cliente e qual é a fonte padrão.</p>
+            <div class="field">
+              <label for="defaultFont">Fonte padrão do texto</label>
+              <select id="defaultFont"></select>
+            </div>
+            <div class="panel-toolbar compact">
+              <input type="search" id="fontCatalogSearch" placeholder="Buscar fonte…" aria-label="Buscar fonte" />
+              <select id="fontCatalogSource" aria-label="Banco de fontes"></select>
+              <input id="fontPreviewText" value="Studio Personalizado" aria-label="Texto de exemplo" />
+            </div>
+            <div class="panel-toolbar compact">
+              <button type="button" class="btn btn-ghost btn-sm" id="fontsEnableAll">Ativar visíveis</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="fontsDisableAll">Desativar visíveis</button>
+              <div class="spacer"></div>
+              <button type="button" class="btn btn-primary btn-sm" id="saveFontSettings">Salvar tipografias</button>
+            </div>
+            <div class="font-catalog" id="fontCatalogList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- Marca & Configurações ---------- -->
+      <section class="tab-panel" id="tab-marca" role="tabpanel" aria-labelledby="tabbtn-marca" hidden>
+        <form class="settings-form" id="settingsForm" novalidate>
+          <div class="admin-card">
+            <h2>Identidade da marca</h2>
+            <div class="logo-editor">
+              <div class="logo-preview" id="logoPreview"><span class="brand-mark">SP</span></div>
+              <div class="stack">
+                <label class="btn btn-ghost btn-sm file-button">
+                  <input type="file" id="logoFile" accept="image/png,image/svg+xml,image/webp,image/jpeg" />
+                  Enviar logo
+                </label>
+                <button type="button" class="btn btn-ghost btn-sm danger" id="removeLogo">Remover logo</button>
+                <p class="muted small">PNG/SVG com fundo transparente, altura mínima de 120 px.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label for="setBrandName">Nome da marca</label><input id="setBrandName" name="brandName" maxlength="30" /></div>
+              <div class="field"><label for="setBrandSubtitle">Subtítulo</label><input id="setBrandSubtitle" name="brandSubtitle" maxlength="40" /></div>
+              <div class="field"><label for="setPrimaryColor">Cor principal</label><input id="setPrimaryColor" name="primaryColor" type="color" /></div>
+              <div class="field"><label for="setOrderPrefix">Prefixo do nº do pedido</label><input id="setOrderPrefix" name="orderPrefix" maxlength="8" placeholder="PED" /></div>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <h2>Modalidades e entrega</h2>
+            <div class="toggles">
+              <label class="toggle"><input type="checkbox" name="modes.EVENTO" /> <span>Evento (retirada no local)</span></label>
+              <label class="toggle"><input type="checkbox" name="modes.ENCOMENDA" /> <span>Encomenda (entrega com endereço)</span></label>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label for="setDeliveryFee">Taxa de entrega (R$)</label><input id="setDeliveryFee" name="deliveryFee" type="number" min="0" step="0.01" /><p class="field-hint">0 = "a combinar".</p></div>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <h2>Pagamentos</h2>
+            <div class="toggles">
+              <label class="toggle"><input type="checkbox" name="payments.CREDITO" /> <span>Cartão de crédito</span></label>
+              <label class="toggle"><input type="checkbox" name="payments.DEBITO" /> <span>Cartão de débito</span></label>
+              <label class="toggle"><input type="checkbox" name="payments.PIX" /> <span>Pix</span></label>
+              <label class="toggle"><input type="checkbox" name="payments.PAGAR_NA_RETIRADA" /> <span>Pagar na retirada</span></label>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label for="setPixKey">Chave Pix</label><input id="setPixKey" name="pix.key" placeholder="CPF/CNPJ, e-mail, +55… ou aleatória" /></div>
+              <div class="field"><label for="setPixName">Nome do recebedor</label><input id="setPixName" name="pix.merchantName" maxlength="25" /></div>
+              <div class="field"><label for="setPixCity">Cidade do recebedor</label><input id="setPixCity" name="pix.merchantCity" maxlength="15" /></div>
+              <div class="field span-2"><label for="setCardInstructions">Instruções para cartão</label><textarea id="setCardInstructions" name="cardInstructions" rows="2"></textarea></div>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <h2>Totem / quiosque</h2>
+            <div class="toggles">
+              <label class="toggle"><input type="checkbox" name="kioskMode" /> <span>Modo totem (reinício automático da sessão)</span></label>
+              <label class="toggle"><input type="checkbox" name="virtualKeyboard" /> <span>Teclado virtual em telas touch grandes</span></label>
+            </div>
+            <div class="form-grid">
+              <div class="field"><label for="setAutoReset">Reiniciar após a confirmação (s)</label><input id="setAutoReset" name="kioskAutoResetSeconds" type="number" min="0" max="600" /><p class="field-hint">0 = não reiniciar.</p></div>
+              <div class="field"><label for="setInactivity">Aviso de inatividade (s)</label><input id="setInactivity" name="kioskInactivitySeconds" type="number" min="0" max="900" /></div>
+            </div>
+          </div>
+
+          <div class="admin-card">
+            <h2>Contato da loja</h2>
+            <div class="form-grid">
+              <div class="field"><label for="setContactWhats">WhatsApp da loja</label><input id="setContactWhats" name="contact.whatsapp" type="tel" /></div>
+              <div class="field"><label for="setContactEmail">E-mail da loja</label><input id="setContactEmail" name="contact.email" type="email" /></div>
+            </div>
+          </div>
+
+          <div class="settings-actions">
+            <button type="submit" class="btn btn-primary" id="saveSettings">Salvar configurações</button>
+          </div>
+        </form>
+
+        <form class="admin-card" id="credentialsForm" hidden>
+          <h2>Acesso ao painel (modo local)</h2>
+          <p class="muted">No modo local o login é apenas uma proteção básica deste navegador. Para segurança real, conecte o Firebase Authentication.</p>
+          <div class="form-grid">
+            <div class="field"><label for="credEmail">E-mail</label><input id="credEmail" type="email" autocomplete="username" required /></div>
+            <div class="field"><label for="credPassword">Nova senha</label><input id="credPassword" type="password" minlength="6" autocomplete="new-password" required /></div>
+          </div>
+          <div class="settings-actions"><button type="submit" class="btn btn-dark">Alterar acesso</button></div>
+        </form>
+
+        <div class="admin-card" id="backendInfo"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Detalhes do pedido -->
+  <div class="drawer-backdrop" id="orderBackdrop" hidden></div>
+  <aside class="drawer drawer-wide" id="orderDrawer" aria-labelledby="orderDrawerTitle" aria-hidden="true" inert>
+    <div class="drawer-head">
+      <div>
+        <h2 id="orderDrawerTitle">Pedido</h2>
+        <p class="muted small" id="orderDrawerSubtitle"></p>
+      </div>
+      <div class="drawer-head-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="printOrder">Imprimir ficha</button>
+        <button type="button" class="icon-button" id="closeOrder" aria-label="Fechar detalhes">✕</button>
+      </div>
+    </div>
+    <div class="drawer-body" id="orderDrawerBody"></div>
+    <div class="drawer-foot order-actions" id="orderDrawerActions"></div>
+  </aside>
+
+  <!-- Formulário de produto -->
+  <dialog class="modal modal-wide" id="productDialog" aria-labelledby="productDialogTitle">
+    <form id="productForm" class="product-form" novalidate>
+      <div class="modal-head">
+        <h2 id="productDialogTitle">Produto</h2>
+        <button type="button" class="icon-button" data-close aria-label="Fechar">✕</button>
+      </div>
+      <div class="modal-body product-form-body">
+        <div class="product-form-fields">
+          <fieldset class="form-section">
+            <legend>Informações</legend>
+            <div class="form-grid">
+              <div class="field span-2"><label for="pfName">Nome</label><input id="pfName" required maxlength="60" /></div>
+              <div class="field span-2"><label for="pfDescription">Descrição curta</label><input id="pfDescription" maxlength="80" placeholder="Ex.: Algodão · 50 × 70 cm" /></div>
+              <div class="field"><label for="pfType">Tipo</label><input id="pfType" list="productTypes" placeholder="camiseta, copo…" /><datalist id="productTypes"><option>camiseta</option><option>copo</option><option>ecobag</option><option>bone</option><option>caneca</option><option>moletom</option><option>almofada</option></datalist></div>
+              <div class="field"><label for="pfPrice">Preço (R$)</label><input id="pfPrice" type="number" min="0" step="0.01" required /></div>
+            </div>
+            <div class="toggles">
+              <label class="toggle"><input type="checkbox" id="pfActive" /> <span>Ativo na loja</span></label>
+              <label class="toggle"><input type="checkbox" id="pfAllowsBack" /> <span>Permite personalizar as costas</span></label>
+              <label class="toggle"><input type="checkbox" id="pfTintable" /> <span>Colorir o mockup com a cor escolhida</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Mockups</legend>
+            <div class="mockup-uploads">
+              <div class="mockup-upload" data-side="front">
+                <span class="field-label">Frente</span>
+                <div class="mockup-thumb" id="pfMockFrontThumb"></div>
+                <label class="btn btn-ghost btn-sm file-button"><input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" data-mock-file="front" />Enviar imagem</label>
+                <input class="url-input" id="pfMockFront" placeholder="ou cole uma URL" />
+              </div>
+              <div class="mockup-upload" data-side="back" id="pfBackMockup">
+                <span class="field-label">Costas</span>
+                <div class="mockup-thumb" id="pfMockBackThumb"></div>
+                <label class="btn btn-ghost btn-sm file-button"><input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" data-mock-file="back" />Enviar imagem</label>
+                <input class="url-input" id="pfMockBack" placeholder="ou cole uma URL" />
+              </div>
+            </div>
+            <p class="muted small">Para colorir automaticamente, use o produto em branco/cinza claro com fundo transparente.</p>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Medidas (cm)</legend>
+            <div class="form-grid form-grid-4">
+              <div class="field"><label for="pfPhysW">Produto · largura</label><input id="pfPhysW" type="number" min="0" step="0.1" /></div>
+              <div class="field"><label for="pfPhysH">Produto · altura</label><input id="pfPhysH" type="number" min="0" step="0.1" /></div>
+              <div class="field"><label for="pfPrintW">Área de impressão · largura</label><input id="pfPrintW" type="number" min="0.5" step="0.1" required /></div>
+              <div class="field"><label for="pfPrintH">Área de impressão · altura</label><input id="pfPrintH" type="number" min="0.5" step="0.1" required /></div>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Posição da área de impressão no mockup</legend>
+            <div class="segmented segmented-sm" id="pfAreaSide" role="group" aria-label="Lado">
+              <button type="button" data-side="front" aria-pressed="true">Frente</button>
+              <button type="button" data-side="back" aria-pressed="false">Costas</button>
+            </div>
+            <div class="form-grid form-grid-3">
+              <div class="field"><label for="pfAreaW">Largura (%)</label><input id="pfAreaW" type="number" min="5" max="100" step="0.5" /></div>
+              <div class="field"><label for="pfAreaX">Centro X (%)</label><input id="pfAreaX" type="number" min="0" max="100" step="0.5" /></div>
+              <div class="field"><label for="pfAreaY">Centro Y (%)</label><input id="pfAreaY" type="number" min="0" max="100" step="0.5" /></div>
+            </div>
+            <p class="muted small">A altura é calculada pela proporção da área de impressão em cm. Arraste o retângulo na prévia para posicionar.</p>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Variações</legend>
+            <div class="field">
+              <span class="field-label">Cores disponíveis</span>
+              <div class="color-list" id="pfColors"></div>
+            </div>
+            <div class="field">
+              <label for="pfSizes">Tamanhos (separados por vírgula)</label>
+              <input id="pfSizes" placeholder="P, M, G, GG  ou  Único" />
+            </div>
+            <div class="field">
+              <span class="field-label">Acabamentos (ex.: Adesivo / Gravação)</span>
+              <div class="finish-list" id="pfFinishes"></div>
+              <button type="button" class="btn btn-ghost btn-sm" id="pfAddFinish">+ Adicionar acabamento</button>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="product-form-preview">
+          <span class="field-label">Prévia</span>
+          <div class="pf-stage" id="pfStage"></div>
+          <p class="muted small" id="pfStageInfo"></p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <p class="notice notice-danger" id="productFormError" hidden></p>
+        <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="productSave">Salvar produto</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
