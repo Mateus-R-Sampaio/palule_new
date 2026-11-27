@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { config, ROOT_DIR } from "./config.js";
 import { query, one } from "./db.js";
 import {
-  securityHeaders, permissionsPolicy, publicCors, requireSameOrigin,
+  securityHeaders, permissionsPolicy, publicCors, requireSameOrigin, publicBase,
   apiLimiter, loginLimiter, orderLimiter, uploadLimiter, adminUploadLimiter,
 } from "./security.js";
 import { login, logout, requireAdmin, isAdminRequest, changePassword, AuthError, safeEqual } from "./auth.js";
@@ -35,7 +35,7 @@ const parse = (schema, data) => schema.parse(data);
 
 /** Converte URLs relativas de arquivos em absolutas (para a loja hospedada em outro domínio). */
 function absolutizer(req) {
-  const base = `${req.protocol}://${req.get("host")}`;
+  const base = publicBase(req);
   const fix = (u) => (typeof u === "string" && u.startsWith("/api/files/") ? base + u : u);
   return (obj) =>
     JSON.parse(JSON.stringify(obj), (_k, v) => fix(v));

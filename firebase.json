@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "public": "deploy/firebase-public",
+    "cleanUrls": false,
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "studio-personalizado",
+          "region": "southamerica-east1"
+        }
+      }
+    ]
+  }
+}

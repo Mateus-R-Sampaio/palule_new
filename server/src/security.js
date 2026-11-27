@@ -38,6 +38,9 @@ export function permissionsPolicy(_req, res, next) {
 }
 
 const ownOrigin = (req) => `${req.protocol}://${req.get("host")}`;
+export const isOwnOrigin = (req, origin) => !!origin && (origin === ownOrigin(req) || config.publicOrigins.includes(origin));
+/** Endereço público do site (para montar links absolutos de imagens). */
+export const publicBase = (req) => config.publicOrigins[0] || ownOrigin(req);
 
 /**
  * CORS só para a API pública da loja (catálogo, pedido, upload de logo) e somente
@@ -45,7 +48,7 @@ const ownOrigin = (req) => `${req.protocol}://${req.get("host")}`;
  */
 export function publicCors(req, res, next) {
   const origin = req.get("origin");
-  if (origin && origin !== ownOrigin(req) && config.allowedOrigins.includes(origin)) {
+  if (origin && !isOwnOrigin(req, origin) && config.allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -65,7 +68,7 @@ export function requireSameOrigin(req, res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
   const origin = req.get("origin");
   const fetchSite = req.get("sec-fetch-site");
-  const sameOrigin = origin ? origin === ownOrigin(req) : fetchSite === "same-origin";
+  const sameOrigin = origin ? isOwnOrigin(req, origin) : fetchSite === "same-origin";
   if (!sameOrigin || req.get("x-requested-with") !== "studio") {
     return res.status(403).json({ error: "Requisição bloqueada (origem não autorizada)." });
   }

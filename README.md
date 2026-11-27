@@ -91,6 +91,74 @@ O GitHub Pages hospeda apenas arquivos: ele **não roda banco de dados nem servi
 
 Também funciona em Railway, Fly.io, VPS com Docker, Azure App Service com Azure Database for PostgreSQL, entre outros: basta rodar o `Dockerfile` com as variáveis do `server/.env.example`.
 
+**Opção Google: Firebase Hosting + Cloud Run + Cloud SQL**
+
+O Firebase Hosting entrega o endereço (`SEU-PROJETO.web.app` ou um domínio próprio) e repassa tudo ao servidor no Cloud Run. O Cloud Run roda o mesmo `Dockerfile`, e o banco fica no Cloud SQL for PostgreSQL. Requer o plano **Blaze** (pago conforme o uso). O Cloud SQL é cobrado mesmo com pouco acesso.
+
+Pré-requisitos: [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) e Firebase CLI (`npm install -g firebase-tools`).
+
+1. Crie um projeto no [console do Firebase](https://console.firebase.google.com), ative o plano Blaze e anote o ID do projeto. Depois:
+   ```bash
+   gcloud auth login
+   ```
+   ```bash
+   gcloud config set project SEU-PROJETO-ID
+   ```
+   ```bash
+   gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com
+   ```
+2. Crie o banco (São Paulo), o usuário e a base:
+   ```bash
+   gcloud sql instances create studio-db --database-version=POSTGRES_16 --edition=ENTERPRISE --tier=db-f1-micro --region=southamerica-east1 --storage-auto-increase --backup-start-time=05:00
+   ```
+   ```bash
+   gcloud sql databases create studio --instance=studio-db
+   ```
+   ```bash
+   gcloud sql users create studio --instance=studio-db --password="SENHA-FORTE-DO-BANCO"
+   ```
+3. Guarde os segredos no Secret Manager (troque `SENHA-FORTE-DO-BANCO` e `SEU-PROJETO-ID`):
+   ```bash
+   printf 'postgres://studio:SENHA-FORTE-DO-BANCO@localhost/studio?host=/cloudsql/SEU-PROJETO-ID:southamerica-east1:studio-db' | gcloud secrets create DATABASE_URL --data-file=-
+   ```
+   ```bash
+   node -e "process.stdout.write(require('crypto').randomBytes(32).toString('hex'))" | gcloud secrets create IP_HASH_SECRET --data-file=-
+   ```
+   Dê à conta de serviço padrão do Cloud Run (`NUMERO-DO-PROJETO-compute@developer.gserviceaccount.com`) os papéis **Secret Manager Secret Accessor** e **Cloud SQL Client**, em *IAM*.
+4. Publique o servidor no Cloud Run (na pasta raiz do repositório):
+   ```bash
+   gcloud run deploy studio-personalizado --source . --region=southamerica-east1 --allow-unauthenticated --add-cloudsql-instances=SEU-PROJETO-ID:southamerica-east1:studio-db --set-secrets=DATABASE_URL=DATABASE_URL:latest,IP_HASH_SECRET=IP_HASH_SECRET:latest --set-env-vars=NODE_ENV=production,DATABASE_SSL=false,TRUST_PROXY=2,SESSION_COOKIE_NAME=__session,PUBLIC_ORIGINS=https://SEU-PROJETO-ID.web.app,https://SEU-PROJETO-ID.firebaseapp.com --max-instances=3
+   ```
+   Se for usar domínio próprio, acrescente-o em `PUBLIC_ORIGINS`.
+5. Importe o catálogo e crie o administrador com *Cloud Run jobs* (usam a mesma imagem e o mesmo banco):
+   ```bash
+   gcloud run jobs deploy studio-seed --image=$(gcloud run services describe studio-personalizado --region=southamerica-east1 --format='value(spec.template.spec.containers[0].image)') --region=southamerica-east1 --set-cloudsql-instances=SEU-PROJETO-ID:southamerica-east1:studio-db --set-secrets=DATABASE_URL=DATABASE_URL:latest,IP_HASH_SECRET=IP_HASH_SECRET:latest --set-env-vars=NODE_ENV=production,DATABASE_SSL=false --command=node --args=server/src/seed.js --execute-now --wait
+   ```
+   Para o administrador, crie antes o segredo da senha (12+ caracteres com letras e números) e depois rode o job:
+   ```bash
+   printf 'SUA-SENHA-DO-PAINEL' | gcloud secrets create ADMIN_PASSWORD --data-file=-
+   ```
+   ```bash
+   gcloud run jobs deploy studio-admin --image=$(gcloud run services describe studio-personalizado --region=southamerica-east1 --format='value(spec.template.spec.containers[0].image)') --region=southamerica-east1 --set-cloudsql-instances=SEU-PROJETO-ID:southamerica-east1:studio-db --set-secrets=DATABASE_URL=DATABASE_URL:latest,IP_HASH_SECRET=IP_HASH_SECRET:latest,ADMIN_PASSWORD=ADMIN_PASSWORD:latest --set-env-vars=NODE_ENV=production,DATABASE_SSL=false --command=node --args=server/src/create-admin.js,voce@loja.com.br --execute-now --wait
+   ```
+   Depois, apague o segredo da senha: `gcloud secrets delete ADMIN_PASSWORD`.
+6. Publique o Firebase Hosting, que aponta tudo para o Cloud Run (`firebase.json`):
+   ```bash
+   firebase login
+   ```
+   ```bash
+   firebase use --add SEU-PROJETO-ID
+   ```
+   ```bash
+   firebase deploy --only hosting
+   ```
+   Pronto: a loja fica em `https://SEU-PROJETO-ID.web.app` e o painel em `/admin.html`. Para usar um domínio próprio, configure em *Firebase Console → Hosting → Adicionar domínio personalizado*.
+
+Observações:
+- O cookie de sessão precisa se chamar `__session`, porque é o único que o Firebase Hosting repassa. Isso já está no comando do passo 4.
+- Se o deploy do Hosting reclamar da região, publique o Cloud Run e o Cloud SQL em `us-central1` e ajuste a região no `firebase.json`.
+- Para atualizar o site depois de mudanças no código, repita o passo 4. O Hosting só precisa ser publicado de novo se o `firebase.json` mudar.
+
 **Manter a loja no GitHub Pages (opcional)**
 
 1. No GitHub, abra **Settings → Secrets and variables → Actions → Variables** e crie `STUDIO_API_BASE` com a URL do servidor.

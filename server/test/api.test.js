@@ -8,6 +8,7 @@ process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || "postgres://studio:s
 process.env.NODE_ENV = "test";
 process.env.ORDER_RATE_LIMIT = "1000";
 process.env.LOGIN_RATE_LIMIT = "30";
+process.env.PUBLIC_ORIGINS = "https://loja-teste.web.app";
 
 const { pool } = await import("../src/db.js");
 const { migrate } = await import("../src/migrate.js");
@@ -293,6 +294,13 @@ test("trocar a senha derruba as outras sessões", async () => {
   const old = await fetch(`${base}/api/admin/orders`, { headers: { Cookie: otherCookie } });
   assert.equal(old.status, 401);
   assert.equal((await call("/api/admin/orders", { withCookie: true })).status, 200);
+});
+
+test("atrás do Firebase Hosting: aceita o domínio público configurado e recusa os outros", async () => {
+  const hosting = await call("/api/auth/login", { method: "POST", body: { email: "x@y.com", password: "z" }, origin: "https://loja-teste.web.app" });
+  assert.equal(hosting.status, 401); // passou da proteção CSRF (só errou a senha)
+  const outro = await call("/api/auth/login", { method: "POST", body: { email: "x@y.com", password: "z" }, origin: "https://loja-falsa.web.app" });
+  assert.equal(outro.status, 403);
 });
 
 test("limite por IP barra força bruta no login", async () => {

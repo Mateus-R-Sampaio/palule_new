@@ -32,6 +32,11 @@ export const config = {
   databaseSsl: env.DATABASE_SSL === "true" ? { rejectUnauthorized: env.DATABASE_SSL_REJECT_UNAUTHORIZED !== "false" } : false,
   // Origens extras autorizadas a chamar a API pública (ex.: a loja hospedada no GitHub Pages).
   allowedOrigins: list(env.ALLOWED_ORIGINS),
+  // Endereços públicos do PRÓPRIO site (ex.: https://projeto.web.app, https://loja.com.br).
+  // Necessário atrás de proxy/CDN (Firebase Hosting), onde o servidor vê outro host (*.run.app).
+  publicOrigins: list(env.PUBLIC_ORIGINS),
+  // Firebase Hosting só repassa ao servidor o cookie chamado "__session".
+  sessionCookieName: env.SESSION_COOKIE_NAME || ((env.NODE_ENV || "development") === "production" ? "__Host-sp_session" : "sp_session"),
   // Atrás de proxy (Render, Railway, Nginx…): número de proxies confiáveis.
   trustProxy: int(env.TRUST_PROXY, 1),
   sessionHours: int(env.SESSION_HOURS, 12),

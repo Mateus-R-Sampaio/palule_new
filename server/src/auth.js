@@ -11,7 +11,7 @@ import { query, one } from "./db.js";
 import { config } from "./config.js";
 import { audit } from "./audit.js";
 
-export const COOKIE_NAME = config.isProd ? "__Host-sp_session" : "sp_session";
+export const COOKIE_NAME = config.sessionCookieName;
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
 
