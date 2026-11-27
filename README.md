@@ -95,7 +95,15 @@ Também funciona em Railway, Fly.io, VPS com Docker, Azure App Service com Azure
 
 O Firebase Hosting entrega o endereço (`SEU-PROJETO.web.app` ou um domínio próprio) e repassa tudo ao servidor no Cloud Run. O Cloud Run roda o mesmo `Dockerfile`, e o banco fica no Cloud SQL for PostgreSQL. Requer o plano **Blaze** (pago conforme o uso). O Cloud SQL é cobrado mesmo com pouco acesso.
 
-Pré-requisitos: [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) e Firebase CLI (`npm install -g firebase-tools`).
+**Jeito mais fácil (um comando):** crie o projeto no [console do Firebase](https://console.firebase.google.com) e ative o plano Blaze. Depois abra o [Google Cloud Shell](https://shell.cloud.google.com), que já vem logado na sua conta, e rode:
+
+```bash
+git clone https://github.com/Mateus-R-Sampaio/palule_new.git && cd palule_new && bash deploy/firebase-gcp.sh
+```
+
+O script `deploy/firebase-gcp.sh` faz todos os passos abaixo sozinho: cria o banco com senha aleatória, guarda os segredos, publica o servidor, importa o catálogo, cria o administrador (a senha é digitada por você e não fica salva) e publica o Hosting. Para publicar uma nova versão do código, rode `git pull` e o mesmo script de novo.
+
+**Passo a passo manual** (o mesmo que o script faz). Pré-requisitos: [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) e Firebase CLI (`npm install -g firebase-tools`).
 
 1. Crie um projeto no [console do Firebase](https://console.firebase.google.com), ative o plano Blaze e anote o ID do projeto. Depois:
    ```bash
