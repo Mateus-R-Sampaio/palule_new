@@ -6,6 +6,10 @@ import sharp from "sharp";
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || "postgres://studio:studio_dev_pw@localhost:5432/studio_test";
 process.env.NODE_ENV = "test";
+// Segurança: estes testes APAGAM o banco. Só rodam em um banco cujo nome termina com "_test".
+if (!/\/[A-Za-z0-9_]*_test(\?|$)/.test(process.env.DATABASE_URL)) {
+  throw new Error(`Recusado: os testes só rodam em um banco "*_test" (recebido: ${process.env.DATABASE_URL.replace(/:[^:@/]*@/, ":***@")})`);
+}
 process.env.ORDER_RATE_LIMIT = "1000";
 process.env.LOGIN_RATE_LIMIT = "30";
 process.env.PUBLIC_ORIGINS = "https://loja-teste.web.app";

@@ -167,6 +167,14 @@ Observações:
 - Se o deploy do Hosting reclamar da região, publique o Cloud Run e o Cloud SQL em `us-central1` e ajuste a região no `firebase.json`.
 - Para atualizar o site depois de mudanças no código, repita o passo 4. O Hosting só precisa ser publicado de novo se o `firebase.json` mudar.
 
+**Atualizar o site no Google depois de mudanças**
+
+As mudanças no banco (migrações) rodam sozinhas quando o servidor novo inicia. Os dados e os segredos não são tocados.
+
+- **Automático (recomendado):** rode uma vez no Cloud Shell `bash deploy/setup-github-deploy.sh` e crie no GitHub as 4 variáveis que ele mostrar (*Settings → Secrets and variables → Actions → Variables*). A partir daí, cada push no `main` roda os testes de segurança (`.github/workflows/deploy-gcp.yml`) e, se passarem, publica sozinho. Se um teste falhar, nada é publicado. Nenhuma chave fica guardada no GitHub: a autenticação usa Workload Identity Federation, restrita a este repositório e ao branch `main`.
+- **Manual:** no Cloud Shell, `cd palule_new && git pull && bash deploy/update.sh`. Use `bash deploy/update.sh SEU-PROJETO-ID --hosting` se o `firebase.json` tiver mudado.
+- **Voltar uma versão:** em *Cloud Run → studio-personalizado → Revisões*, escolha a anterior e clique em *Gerenciar tráfego → 100%*.
+
 **Manter a loja no GitHub Pages (opcional)**
 
 1. No GitHub, abra **Settings → Secrets and variables → Actions → Variables** e crie `STUDIO_API_BASE` com a URL do servidor.
