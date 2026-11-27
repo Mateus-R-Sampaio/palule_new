@@ -7,6 +7,7 @@
 // Formato interno de um lado ("side"):
 // {
 //   art:  { id, name, url, x, y, widthCm, aspect, rotation, bounds:{x,y,w,h} } | null,
+//   logo: { name, url, x, y, widthCm, aspect, rotation, bounds } | null   (logo enviada pelo cliente)
 //   text: { value, fontId, family, stack, source, fontUrl, color, sizeCm, x, y, rotation, bold, italic }
 // }
 
@@ -30,7 +31,11 @@ export const getMockupUrl = (product, sideKey) => {
   return (sideKey === "back" ? m.back : m.front) || m.front || "";
 };
 
-export const sideHasContent = (side) => !!(side && (side.art || side.text?.value?.trim()));
+export const sideHasContent = (side) => !!(side && (side.art || side.logo || side.text?.value?.trim()));
+
+/** Tipos de elemento no palco: imagens (estampa/logo) usam widthCm; texto usa sizeCm. */
+export const IMAGE_KINDS = ["art", "logo"];
+export const isImageKind = (kind) => IMAGE_KINDS.includes(kind);
 
 /* ---------------- Geometria ---------------- */
 
@@ -68,7 +73,7 @@ export function measureTextCm(text) {
 
 export const artSizeCm = (art) => ({ width: art.widthCm, height: art.widthCm / (art.aspect || 1) });
 
-export const designSizeCm = (kind, obj) => (kind === "art" ? artSizeCm(obj) : measureTextCm(obj));
+export const designSizeCm = (kind, obj) => (isImageKind(kind) ? artSizeCm(obj) : measureTextCm(obj));
 
 /** Garante que estampa/texto respeitam os limites físicos (tamanho e posição). */
 export function constrainDesign(kind, obj, pc) {
@@ -76,7 +81,7 @@ export function constrainDesign(kind, obj, pc) {
   let size = designSizeCm(kind, obj);
   const scale = fitScale(size.width, size.height, obj.rotation, pc);
   if (scale < 1) {
-    if (kind === "art") obj.widthCm = round(obj.widthCm * scale * 0.999, 3);
+    if (isImageKind(kind)) obj.widthCm = round(obj.widthCm * scale * 0.999, 3);
     else obj.sizeCm = round(obj.sizeCm * scale * 0.999, 3);
     size = designSizeCm(kind, obj);
   }
@@ -208,9 +213,9 @@ function addHandles(node) {
   node.append(rot);
 }
 
-function buildArt(art, pc, interactive) {
-  const node = el("div", "design design-art");
-  node.dataset.kind = "art";
+function buildArt(art, pc, interactive, kind = "art") {
+  const node = el("div", `design design-art design-${kind}`);
+  node.dataset.kind = kind;
   const crop = el("div", "art-crop");
   const img = el("img");
   img.src = art.url;
@@ -226,7 +231,10 @@ function buildArt(art, pc, interactive) {
   if (interactive) {
     node.tabIndex = 0;
     node.setAttribute("role", "button");
-    node.setAttribute("aria-label", `Estampa ${art.name || ""}. Arraste para mover; use as setas do teclado para ajustar.`);
+    node.setAttribute(
+      "aria-label",
+      `${kind === "logo" ? "Sua logo" : `Estampa ${art.name || ""}`}. Arraste para mover; use as setas do teclado para ajustar.`
+    );
     addHandles(node);
   }
   applyArtStyle(node, art, pc);
@@ -250,7 +258,7 @@ function buildText(text, pc, interactive) {
 
 /**
  * Monta a prévia de um lado do produto.
- * @returns {{ root: HTMLElement, area: HTMLElement, art: HTMLElement|null, text: HTMLElement|null }}
+ * @returns {{ root: HTMLElement, area: HTMLElement, art: HTMLElement|null, logo: HTMLElement|null, text: HTMLElement|null }}
  */
 export function buildStage({
   product,
@@ -298,18 +306,24 @@ export function buildStage({
   root.append(area);
 
   let artNode = null;
+  let logoNode = null;
   let textNode = null;
   if (side?.art) {
-    artNode = buildArt(side.art, pc, interactive);
+    artNode = buildArt(side.art, pc, interactive, "art");
     if (selected === "art") artNode.classList.add("is-selected");
     area.append(artNode);
+  }
+  if (side?.logo) {
+    logoNode = buildArt(side.logo, pc, interactive, "logo");
+    if (selected === "logo") logoNode.classList.add("is-selected");
+    area.append(logoNode);
   }
   if (side?.text?.value?.trim()) {
     textNode = buildText(side.text, pc, interactive);
     if (selected === "text") textNode.classList.add("is-selected");
     area.append(textNode);
   }
-  return { root, area, art: artNode, text: textNode };
+  return { root, area, art: artNode, logo: logoNode, text: textNode };
 }
 
 /* ---------------- Conversão para o formato do pedido ---------------- */
@@ -326,6 +340,13 @@ export function toOrderSide(side) {
     estampa_rotacao_graus: null,
     estampa_recorte: null,
     estampa_proporcao: null,
+    logo_url: null,
+    logo_nome: null,
+    logo_posicao_cm: null,
+    logo_dimensoes_cm: null,
+    logo_rotacao_graus: null,
+    logo_recorte: null,
+    logo_proporcao: null,
     texto: null,
     texto_fonte: null,
     texto_fonte_id: null,
@@ -354,6 +375,19 @@ export function toOrderSide(side) {
       estampa_rotacao_graus: round(a.rotation || 0, 1),
       estampa_recorte: a.bounds || { x: 0, y: 0, w: 1, h: 1 },
       estampa_proporcao: round(a.aspect || 1, 5),
+    });
+  }
+  if (side.logo) {
+    const l = side.logo;
+    const size = artSizeCm(l);
+    Object.assign(out, {
+      logo_url: l.url,
+      logo_nome: l.name || "logo",
+      logo_posicao_cm: { x: round(l.x, 2), y: round(l.y, 2) },
+      logo_dimensoes_cm: { largura: round(size.width, 2), altura: round(size.height, 2) },
+      logo_rotacao_graus: round(l.rotation || 0, 1),
+      logo_recorte: l.bounds || { x: 0, y: 0, w: 1, h: 1 },
+      logo_proporcao: round(l.aspect || 1, 5),
     });
   }
   const t = side.text;
@@ -398,6 +432,18 @@ export function fromOrderSide(o) {
         bounds: o.estampa_recorte || null,
       }
     : null;
+  const logo = o.logo_url
+    ? {
+        name: o.logo_nome,
+        url: o.logo_url,
+        x: o.logo_posicao_cm?.x || 0,
+        y: o.logo_posicao_cm?.y || 0,
+        widthCm: o.logo_dimensoes_cm?.largura || 1,
+        aspect: o.logo_proporcao || (o.logo_dimensoes_cm ? o.logo_dimensoes_cm.largura / o.logo_dimensoes_cm.altura : 1),
+        rotation: o.logo_rotacao_graus || 0,
+        bounds: o.logo_recorte || null,
+      }
+    : null;
   const text = o.texto
     ? {
         value: o.texto,
@@ -415,7 +461,7 @@ export function fromOrderSide(o) {
         italic: !!o.texto_italico,
       }
     : null;
-  return { art, text };
+  return { art, logo, text };
 }
 
 /** Configuração mínima do produto guardada junto do item (prévia estável no admin). */

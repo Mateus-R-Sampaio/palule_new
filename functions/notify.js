@@ -67,6 +67,7 @@ function itemLines(order) {
     for (const side of [i.frente, i.costas]) {
       if (!side) continue;
       if (side.estampa_nome) custom.push(side.estampa_nome);
+      if (side.logo_url) custom.push("Logo do cliente");
       if (side.texto) custom.push(`“${side.texto}” (${side.texto_fonte})`);
     }
     return { title: parts.join(" · "), custom: custom.join(" + "), price: brl((i.valor_unitario || 0) * (i.quantidade || 1)) };

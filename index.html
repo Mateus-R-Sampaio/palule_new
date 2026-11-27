@@ -73,13 +73,15 @@
           </div>
           <div class="stage-wrap" id="stageWrap" aria-label="Prévia do produto"></div>
           <p class="dimension-readout" id="dimensionReadout" aria-live="polite"></p>
-          <div class="stage-tools">
-            <button type="button" class="btn btn-ghost btn-sm" id="resetArtPosition">Centralizar estampa</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="resetCustomNamePosition">Centralizar texto</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="rotateReset">Zerar rotação</button>
-            <button type="button" class="btn btn-ghost btn-sm danger" id="removeSelected">Remover selecionado</button>
-          </div>
-          <p class="hint">Arraste para mover · cantos para redimensionar · alça de cima para girar (segure Shift para girar de 15° em 15°).</p>
+          <details class="stage-tools-panel" id="stageToolsPanel">
+            <summary>Ferramentas de ajuste</summary>
+            <div class="stage-tools">
+              <button type="button" class="btn btn-ghost btn-sm" id="centerSelected">Centralizar selecionado</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="rotateReset">Zerar rotação</button>
+              <button type="button" class="btn btn-ghost btn-sm danger" id="removeSelected">Remover selecionado</button>
+            </div>
+            <p class="hint">Arraste para mover · cantos para redimensionar · alça de cima para girar (Shift = passos de 15°). No teclado: setas movem, + e − mudam o tamanho.</p>
+          </details>
         </div>
 
         <div class="controls-column">
@@ -91,72 +93,124 @@
             <strong class="price" id="editorPrice">R$ 0,00</strong>
           </div>
 
-          <fieldset class="control-group" id="colorGroup">
-            <legend>Cor do produto</legend>
-            <div class="swatches" id="colorOptions"></div>
-          </fieldset>
-
-          <fieldset class="control-group" id="sizeGroup">
-            <legend>Tamanho <span class="required" aria-hidden="true">*</span></legend>
-            <div class="chips" id="sizeOptions"></div>
-          </fieldset>
-
-          <fieldset class="control-group" id="finishGroup" hidden>
-            <legend>Acabamento <span class="required" aria-hidden="true">*</span></legend>
-            <div class="option-cards" id="finishOptions"></div>
-          </fieldset>
-
-          <section class="control-group">
-            <div class="group-head">
-              <h2>Estampa</h2>
-              <button type="button" class="btn btn-ghost btn-sm" id="artToggle" aria-expanded="true" aria-controls="artListPanel">Ocultar</button>
-            </div>
-            <div class="art-panel" id="artListPanel">
-              <div class="chips chips-sm" id="artCategories" role="group" aria-label="Categorias de estampa"></div>
-              <div class="art-grid" id="artList"></div>
-            </div>
-          </section>
-
-          <section class="control-group custom-name-field">
-            <div class="group-head">
-              <h2><label for="customProductName">Texto personalizado</label></h2>
-              <span class="counter" id="customNameCounter">0/24</span>
-            </div>
-            <input type="text" id="customProductName" maxlength="24" autocomplete="off" placeholder="Ex.: seu nome" enterkeyhint="done" />
-
-            <div class="field-row">
-              <span class="field-label">Tipografia</span>
-              <button type="button" class="font-select" id="fontPickerButton" aria-haspopup="dialog">
-                <span class="font-select-name" id="fontPickerName">Montserrat</span>
-                <span class="font-select-source" id="fontPickerSource">Google</span>
-              </button>
-            </div>
-
-            <div class="field-row">
-              <span class="field-label">Estilo</span>
-              <div class="segmented segmented-sm" role="group" aria-label="Estilo do texto">
-                <button type="button" id="textBold" aria-pressed="false"><b>N</b><span class="sr-only">Negrito</span></button>
-                <button type="button" id="textItalic" aria-pressed="false"><i>I</i><span class="sr-only">Itálico</span></button>
+          <div class="accordion" id="editorAccordion">
+            <details class="control-group" id="colorGroup" data-section="color">
+              <summary>
+                <span class="summary-title">Cor do produto</span>
+                <span class="summary-value" id="colorSummary"></span>
+              </summary>
+              <div class="control-body">
+                <div class="swatches" id="colorOptions" role="group" aria-label="Cor do produto"></div>
               </div>
-            </div>
+            </details>
 
-            <div class="field-row">
-              <span class="field-label" id="textColorLabel">Cor da letra</span>
-              <div class="swatches swatches-sm" id="textColorOptions" role="group" aria-labelledby="textColorLabel"></div>
-              <label class="color-picker" title="Escolher outra cor">
-                <input type="color" id="textColorPicker" value="#171a25" />
-                <span class="sr-only">Escolher outra cor</span>
-              </label>
-            </div>
-            <p class="hint" id="engraveHint" hidden>Na gravação a laser o texto e a estampa saem em tom metálico; a cor da letra não se aplica.</p>
+            <details class="control-group" id="sizeGroup" data-section="size">
+              <summary>
+                <span class="summary-title">Tamanho <span class="required" aria-hidden="true">*</span></span>
+                <span class="summary-value" id="sizeSummary"></span>
+              </summary>
+              <div class="control-body">
+                <div class="chips" id="sizeOptions" role="group" aria-label="Tamanho"></div>
+              </div>
+            </details>
 
-            <div class="field-row">
-              <label class="field-label" for="textSizeRange">Tamanho</label>
-              <input type="range" id="textSizeRange" min="0.3" max="10" step="0.1" value="1.5" />
-              <output id="textSizeOutput" for="textSizeRange">1,5 cm</output>
-            </div>
-          </section>
+            <details class="control-group" id="finishGroup" data-section="finish" hidden>
+              <summary>
+                <span class="summary-title">Acabamento <span class="required" aria-hidden="true">*</span></span>
+                <span class="summary-value" id="finishSummary"></span>
+              </summary>
+              <div class="control-body">
+                <div class="option-cards" id="finishOptions" role="radiogroup" aria-label="Acabamento"></div>
+              </div>
+            </details>
 
+            <details class="control-group" id="artGroup" data-section="art">
+              <summary>
+                <span class="summary-title">Estampa</span>
+                <span class="summary-value" id="artSummary"></span>
+              </summary>
+              <div class="control-body art-panel" id="artListPanel">
+                <div class="chips chips-sm" id="artCategories" role="group" aria-label="Categorias de estampa"></div>
+                <div class="art-grid" id="artList"></div>
+              </div>
+            </details>
+
+            <details class="control-group" id="logoGroup" data-section="logo">
+              <summary>
+                <span class="summary-title">Sua logo</span>
+                <span class="summary-value" id="logoSummary"></span>
+              </summary>
+              <div class="control-body logo-field">
+                <div class="logo-upload" id="logoUpload">
+                  <div class="logo-thumb" id="logoThumb" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </div>
+                  <div class="logo-upload-text">
+                    <label class="btn btn-ghost btn-sm file-button" id="logoPickLabel">
+                      <input type="file" id="customerLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" />
+                      <span id="logoPickText">Enviar minha logo</span>
+                    </label>
+                    <p class="hint">PNG com fundo transparente fica melhor. Também aceita JPG, WebP ou SVG (até 10 MB).</p>
+                  </div>
+                </div>
+                <label class="toggle-row">
+                  <input type="checkbox" id="logoRemoveWhite" />
+                  <span>Remover fundo branco da imagem</span>
+                </label>
+                <div class="logo-actions">
+                  <button type="button" class="btn btn-ghost btn-sm" id="resetLogoPosition">Centralizar logo</button>
+                  <button type="button" class="btn btn-ghost btn-sm danger" id="removeLogo">Remover logo</button>
+                </div>
+                <p class="hint">Ao enviar, você confirma que tem autorização para usar esta marca.</p>
+              </div>
+            </details>
+
+            <details class="control-group custom-name-field" id="textGroup" data-section="text">
+              <summary>
+                <span class="summary-title">Texto personalizado</span>
+                <span class="summary-value" id="textSummary"></span>
+              </summary>
+              <div class="control-body">
+                <div class="group-head">
+                  <label class="field-label" for="customProductName">Seu texto</label>
+                  <span class="counter" id="customNameCounter">0/24</span>
+                </div>
+                <input type="text" id="customProductName" maxlength="24" autocomplete="off" placeholder="Ex.: seu nome" enterkeyhint="done" />
+
+                <div class="field-row">
+                  <span class="field-label">Tipografia</span>
+                  <button type="button" class="font-select" id="fontPickerButton" aria-haspopup="dialog">
+                    <span class="font-select-name" id="fontPickerName">Montserrat</span>
+                    <span class="font-select-source" id="fontPickerSource">Google</span>
+                  </button>
+                </div>
+
+                <div class="field-row">
+                  <span class="field-label">Estilo</span>
+                  <div class="segmented segmented-sm" role="group" aria-label="Estilo do texto">
+                    <button type="button" id="textBold" aria-pressed="false"><b>N</b><span class="sr-only">Negrito</span></button>
+                    <button type="button" id="textItalic" aria-pressed="false"><i>I</i><span class="sr-only">Itálico</span></button>
+                  </div>
+                </div>
+
+                <div class="field-row">
+                  <span class="field-label" id="textColorLabel">Cor da letra</span>
+                  <div class="swatches swatches-sm" id="textColorOptions" role="group" aria-labelledby="textColorLabel"></div>
+                  <label class="color-picker" title="Escolher outra cor">
+                    <input type="color" id="textColorPicker" value="#171a25" />
+                    <span class="sr-only">Escolher outra cor</span>
+                  </label>
+                </div>
+                <p class="hint" id="engraveHint" hidden>Na gravação a laser o texto, a estampa e a logo saem em tom metálico; a cor da letra não se aplica.</p>
+
+                <div class="field-row">
+                  <label class="field-label" for="textSizeRange">Tamanho</label>
+                  <input type="range" id="textSizeRange" min="0.3" max="10" step="0.1" value="1.5" />
+                  <output id="textSizeOutput" for="textSizeRange">1,5 cm</output>
+                </div>
+              </div>
+            </details>
+          </div>
           <div class="quantity-row">
             <span class="field-label">Quantidade</span>
             <div class="stepper-input">

@@ -2,7 +2,7 @@
 
 Aplicação web (PWA) para personalização de produtos em tempo real: copos, camisetas, ecobags e bonés. Tem duas áreas:
 
-- **Loja / totem (`index.html`)**: o cliente escolhe o produto; aplica estampa, texto, cor da letra, tipografia, cor do produto, tamanho e acabamento; revisa o carrinho com prévia de frente e costas; informa os dados (Evento ou Encomenda com endereço) e escolhe o pagamento (crédito, débito, Pix ou pagar na retirada). No fim, recebe o número do pedido.
+- **Loja / totem (`index.html`)**: o cliente escolhe o produto; aplica estampa, **a própria logo** (com opção de remover fundo branco), texto, cor da letra, tipografia, cor do produto, tamanho e acabamento, em seções retráteis que mantêm a tela limpa; revisa o carrinho com prévia de frente e costas; informa os dados (Evento ou Encomenda com endereço) e escolhe o pagamento (crédito, débito, Pix ou pagar na retirada). No fim, recebe o número do pedido.
 - **Painel admin (`admin.html`)**: login, pedidos em tempo real (Kanban com ficha técnica completa), catálogo e mockups, estampas, tipografias e identidade da marca.
 
 ## Como rodar
@@ -71,6 +71,12 @@ O modelo da mensagem segue a especificação: `Olá, {{cliente_nome}}! Seu pedid
 O resultado de cada envio, ou o erro, fica registrado em `orders/{id}.notificacoes` e aparece no painel.
 
 **Webhook de pagamento:** `paymentWebhook` recebe `POST { numero_pedido, status: "PAGO" }` com o header `x-webhook-secret`. Adapte o mapeamento ao seu gateway (Mercado Pago, Asaas, Stripe…). Ao confirmar o pagamento, o pedido vai para a fila e o cliente é avisado.
+
+## Logo do cliente
+
+No editor, a seção **Sua logo** aceita PNG, JPG, WebP ou SVG (até 10 MB) em qualquer produto e em cada lado (frente e costas). A imagem é reduzida no navegador e pode ter o fundo branco removido. Depois, a logo é posicionada, redimensionada e girada como uma estampa, sempre dentro da área de impressão. A estampa, a logo e o texto podem ser usados juntos.
+
+No modo nuvem, as logos são enviadas ao Firebase Storage (`customer-logos/`) só ao confirmar o pedido. As regras permitem esse envio sem login, mas apenas de imagens. No painel, a ficha do pedido mostra a logo com as medidas em cm e o link para baixar o arquivo.
 
 ## Tipografias
 

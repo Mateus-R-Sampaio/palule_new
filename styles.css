@@ -2190,3 +2190,244 @@ body.has-virtual-keyboard main {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* =====================================================================
+   Editor: seções retráteis (acordeão) e logo do cliente
+   ===================================================================== */
+
+.accordion {
+  display: grid;
+  gap: 10px;
+}
+
+details.control-group {
+  display: block;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+details.control-group[open] {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+details.control-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 0 16px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+details.control-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.control-group > summary::after {
+  content: "";
+  flex: none;
+  width: 9px;
+  height: 9px;
+  margin-left: 4px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  margin-top: -4px;
+  transform: rotate(45deg);
+}
+
+details.control-group[open] > summary::after {
+  margin-top: 4px;
+  transform: rotate(225deg);
+}
+
+details.control-group > summary:hover {
+  background: var(--surface-2);
+}
+
+.summary-title {
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+
+.summary-value {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-align: right;
+}
+
+.summary-value.has-value {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.summary-value.is-pending {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.dot-swatch {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1.5px var(--line-strong);
+  vertical-align: middle;
+}
+
+.control-body {
+  display: grid;
+  gap: 12px;
+  padding: 4px 16px 16px;
+  animation: section-in 0.18s ease;
+}
+
+@keyframes section-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+details.control-group.is-invalid > summary .summary-title {
+  color: var(--danger);
+}
+
+/* Logo do cliente */
+.logo-upload {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  border: 1.5px dashed var(--line-strong);
+  color: var(--muted);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.logo-thumb svg {
+  width: 30px;
+  height: 30px;
+}
+
+.logo-thumb.has-image {
+  border-style: solid;
+  padding: 6px;
+  background: repeating-conic-gradient(#eceef4 0% 25%, #ffffff 0% 50%) 0 0 / 14px 14px;
+}
+
+.logo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.logo-upload-text {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.logo-upload-text .file-button {
+  justify-self: start;
+}
+
+.file-button {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.toggle-row input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.toggle-row:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.logo-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Ferramentas do palco (retráteis) */
+.stage-tools-panel {
+  border-radius: var(--radius-sm);
+}
+
+.stage-tools-panel > summary {
+  width: fit-content;
+  margin: 0 auto;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.stage-tools-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.stage-tools-panel > summary::before {
+  content: "⚙ ";
+}
+
+.stage-tools-panel > summary:hover {
+  background: var(--surface-2);
+}
+
+.stage-tools-panel[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.stage-tools-panel .hint {
+  text-align: center;
+}
+
+.controls-column .group-head {
+  margin-bottom: -4px;
+}

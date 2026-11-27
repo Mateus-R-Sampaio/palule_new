@@ -1245,3 +1245,14 @@ code {
     print-color-adjust: exact;
   }
 }
+
+.logo-spec-thumb {
+  display: inline-block;
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin-right: 6px;
+  border-radius: 6px;
+  background: repeating-conic-gradient(#eceef4 0% 25%, #ffffff 0% 50%) 0 0 / 10px 10px;
+}

@@ -12,7 +12,7 @@ import {
 } from "./fonts.js";
 import {
   buildStage, applyArtStyle, applyTextStyle, getPrintCm, constrainDesign, designSizeCm, fitScale,
-  clampPosition, sideHasContent, toOrderSide, getArtVisibleBounds, productRenderSnapshot, SIDE_LABELS,
+  sideHasContent, toOrderSide, getArtVisibleBounds, productRenderSnapshot, SIDE_LABELS, isImageKind,
 } from "./render.js";
 import { buildPixPayload, renderQrSvg } from "./pix.js";
 import { setupVirtualKeyboard } from "./keyboard.js";
@@ -43,7 +43,8 @@ const state = {
   finishId: null,
   quantity: 1,
   activeSide: "front",
-  selected: null, // "art" | "text" | null
+  selected: null, // "art" | "logo" | "text" | null
+  logoFiles: {}, // arquivo original da logo por lado (para reprocessar "remover fundo")
   sides: null, // { front: Side, back: Side }
   editingItemId: null,
   artCategory: "Todas",
@@ -103,6 +104,7 @@ function makeSide(product) {
   const font = findFont(state.settings.defaultFontId, state.fonts);
   return {
     art: null,
+    logo: null,
     text: {
       value: "",
       fontId: font.id,
@@ -355,6 +357,9 @@ function openEditor(product, item = null) {
   state.activeSide = "front";
   state.selected = null;
   state.artCategory = "Todas";
+  state.logoFiles = {};
+  for (const k of ["front", "back"]) state.sides[k].logo ??= null;
+  closeAllSections();
   goTo("editor");
 }
 
@@ -371,10 +376,60 @@ function renderEditor() {
   renderArtCategories();
   renderArtList();
   syncTextControls();
+  syncLogoControls();
   updateQuantity();
   updateEditorPrice();
   renderStage();
   ensureTextFont();
+}
+
+/* ---------- Seções retráteis (acordeão) ---------- */
+
+const SECTION_IDS = ["colorGroup", "sizeGroup", "finishGroup", "artGroup", "logoGroup", "textGroup"];
+
+function closeAllSections() {
+  SECTION_IDS.forEach((id) => ($(`#${id}`).open = false));
+  $("#stageToolsPanel").open = false;
+}
+
+function openSection(id) {
+  const el = $(`#${id}`);
+  if (!el || el.hidden) return;
+  SECTION_IDS.filter((other) => other !== id).forEach((other) => ($(`#${other}`).open = false));
+  el.open = true;
+  el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function setupAccordion() {
+  // Só uma seção aberta por vez, para manter a tela limpa
+  const closeOthers = (id) => SECTION_IDS.filter((other) => other !== id).forEach((other) => ($(`#${other}`).open = false));
+  SECTION_IDS.forEach((id) => {
+    const details = $(`#${id}`);
+    details.querySelector(":scope > summary").addEventListener("click", () => {
+      if (!details.open) closeOthers(id); // vai abrir
+    });
+    details.addEventListener("toggle", () => details.open && closeOthers(id));
+  });
+}
+
+function updateSummaries() {
+  if (!state.product) return;
+  const side = getActiveSideState();
+  const finish = getFinish();
+  $("#colorSummary").innerHTML = `<span class="dot-swatch" style="--swatch:${escapeHtml(state.color)}"></span>`;
+  const size = $("#sizeSummary");
+  size.textContent = state.size || "Escolha";
+  size.classList.toggle("is-pending", !state.size);
+  const fin = $("#finishSummary");
+  fin.textContent = finish ? finish.label : "Escolha";
+  fin.classList.toggle("is-pending", !finish);
+  $("#artSummary").textContent = side.art ? side.art.name.replace(/^Estampa \d+ · /, "") : "Nenhuma";
+  $("#logoSummary").textContent = side.logo ? "Adicionada" : "Nenhuma";
+  const t = side.text;
+  $("#textSummary").textContent = t.value.trim() ? `“${t.value.trim()}” · ${t.family}` : "Nenhum";
+  ["artSummary", "logoSummary", "textSummary"].forEach((id) =>
+    $(`#${id}`).classList.toggle("has-value", !/^Nenhu/.test($(`#${id}`).textContent))
+  );
 }
 
 function updateEditorPrice() {
@@ -492,6 +547,7 @@ function updateQuantity() {
 function renderStage() {
   const side = getActiveSideState();
   if (state.selected === "art" && !side.art) state.selected = null;
+  if (state.selected === "logo" && !side.logo) state.selected = null;
   if (state.selected === "text" && !side.text.value.trim()) state.selected = null;
   stage = buildStage({
     product: state.product,
@@ -506,12 +562,14 @@ function renderStage() {
   attachStageInteractions();
   updateReadout();
   updateStageTools();
+  updateSummaries();
 }
 
 function refreshDesign(kind) {
   const side = getActiveSideState();
   const pc = getPrintCm(state.product);
   if (kind === "art" && stage.art && side.art) applyArtStyle(stage.art, side.art, pc);
+  if (kind === "logo" && stage.logo && side.logo) applyArtStyle(stage.logo, side.logo, pc);
   if (kind === "text" && stage.text && side.text) applyTextStyle(stage.text, side.text, pc);
   updateReadout();
 }
@@ -519,6 +577,7 @@ function refreshDesign(kind) {
 function setSelected(kind) {
   state.selected = kind;
   stage.art?.classList.toggle("is-selected", kind === "art");
+  stage.logo?.classList.toggle("is-selected", kind === "logo");
   stage.text?.classList.toggle("is-selected", kind === "text");
   updateReadout();
   updateStageTools();
@@ -526,10 +585,11 @@ function setSelected(kind) {
 
 function updateStageTools() {
   const side = getActiveSideState();
-  $("#resetArtPosition").disabled = !side.art;
-  $("#resetCustomNamePosition").disabled = !side.text.value.trim();
-  $("#removeSelected").disabled = !state.selected;
-  const obj = state.selected === "art" ? side.art : state.selected === "text" ? side.text : null;
+  const obj = state.selected ? side[state.selected] : null;
+  $("#centerSelected").disabled = !obj;
+  $("#removeSelected").disabled = !obj;
+  $("#resetLogoPosition").disabled = !side.logo;
+  $("#removeLogo").disabled = !side.logo;
   $("#rotateReset").disabled = !obj || !obj.rotation;
 }
 
@@ -542,8 +602,9 @@ function updateReadout() {
     return `${label}: ${formatNumber(s.width)} × ${formatNumber(s.height)} cm · X ${formatNumber(obj.x)} / Y ${formatNumber(obj.y)} cm · ${Math.round(obj.rotation || 0)}°`;
   };
   if (state.selected === "art" && side.art) parts.push(describe("Estampa", "art", side.art));
+  else if (state.selected === "logo" && side.logo) parts.push(describe("Logo", "logo", side.logo));
   else if (state.selected === "text" && side.text.value.trim()) parts.push(describe("Texto", "text", side.text));
-  else parts.push("Toque na estampa ou no texto para ajustar");
+  else parts.push("Toque na estampa, na logo ou no texto para ajustar");
   $("#dimensionReadout").textContent = parts.join(" — ");
 }
 
@@ -564,7 +625,7 @@ function attachStageInteractions() {
     design.focus({ preventScroll: true });
 
     const side = getActiveSideState();
-    const obj = kind === "art" ? side.art : side.text;
+    const obj = side[kind];
     const handle = e.target.closest("[data-handle]")?.dataset.handle;
     const mode = !handle ? "move" : handle === "rotate" ? "rotate" : "resize";
     const rect = area.getBoundingClientRect();
@@ -576,7 +637,7 @@ function attachStageInteractions() {
       py: e.clientY,
       x: obj.x,
       y: obj.y,
-      size: kind === "art" ? obj.widthCm : obj.sizeCm,
+      size: isImageKind(kind) ? obj.widthCm : obj.sizeCm,
       dist: Math.max(4, Math.hypot(e.clientX - cx, e.clientY - cy)),
     };
     root.setPointerCapture(e.pointerId);
@@ -588,14 +649,14 @@ function attachStageInteractions() {
         obj.y = start.y + (ev.clientY - start.py) / pxPerCm;
       } else if (mode === "resize") {
         const scale = Math.hypot(ev.clientX - cx, ev.clientY - cy) / start.dist;
-        const min = kind === "art" ? 0.5 : 0.3;
+        const min = isImageKind(kind) ? 0.5 : 0.3;
         const next = Math.max(min, start.size * scale);
-        if (kind === "art") obj.widthCm = next;
+        if (isImageKind(kind)) obj.widthCm = next;
         else obj.sizeCm = next;
         const s = designSizeCm(kind, obj);
         const fit = fitScale(s.width, s.height, obj.rotation, pc);
         if (fit < 1) {
-          if (kind === "art") obj.widthCm *= fit;
+          if (isImageKind(kind)) obj.widthCm *= fit;
           else obj.sizeCm *= fit;
         }
       } else {
@@ -630,17 +691,17 @@ function attachStageInteractions() {
     if (!design) return;
     const kind = design.dataset.kind;
     const side = getActiveSideState();
-    const obj = kind === "art" ? side.art : side.text;
+    const obj = side[kind];
     const step = e.shiftKey ? 1 : 0.1;
     const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     if (moves[e.key]) {
       obj.x += moves[e.key][0];
       obj.y += moves[e.key][1];
     } else if (e.key === "+" || e.key === "=") {
-      if (kind === "art") obj.widthCm *= 1.05;
+      if (isImageKind(kind)) obj.widthCm *= 1.05;
       else obj.sizeCm *= 1.05;
     } else if (e.key === "-") {
-      if (kind === "art") obj.widthCm = Math.max(0.5, obj.widthCm / 1.05);
+      if (isImageKind(kind)) obj.widthCm = Math.max(0.5, obj.widthCm / 1.05);
       else obj.sizeCm = Math.max(0.3, obj.sizeCm / 1.05);
     } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
@@ -707,6 +768,10 @@ function removeSelected() {
   if (state.selected === "art") {
     side.art = null;
     renderArtList();
+  } else if (state.selected === "logo") {
+    side.logo = null;
+    delete state.logoFiles[state.activeSide];
+    syncLogoControls();
   } else if (state.selected === "text") {
     side.text.value = "";
     syncTextControls();
@@ -714,6 +779,148 @@ function removeSelected() {
   state.selected = null;
   renderStage();
   renderSideToggle();
+}
+
+function centerDesign(kind) {
+  const obj = kind ? getActiveSideState()[kind] : null;
+  if (!obj) return;
+  obj.x = 0;
+  obj.y = 0;
+  constrainDesign(kind, obj, getPrintCm(state.product));
+  setSelected(kind);
+  refreshDesign(kind);
+}
+
+/* ---------- Logo do cliente ---------- */
+
+const LOGO_MAX_BYTES = 10 * 1024 * 1024;
+const LOGO_MAX_PX = 1400;
+
+function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Não foi possível ler esta imagem."));
+    };
+    img.src = url;
+  });
+}
+
+const readAsDataUrl = (blob) =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+
+/** Reduz a logo, opcionalmente remove o fundo branco e devolve um data URL com transparência. */
+async function processLogoFile(file, removeWhite) {
+  if (file.size > LOGO_MAX_BYTES) throw new Error("A imagem passa de 10 MB. Envie um arquivo menor.");
+  if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) throw new Error("Formato não suportado. Use PNG, JPG, WebP ou SVG.");
+  if (file.type === "image/svg+xml" && !removeWhite) {
+    if (file.size > 600_000) throw new Error("SVG muito grande (máx. 600 KB).");
+    return readAsDataUrl(file);
+  }
+  const img = await loadImageFromFile(file);
+  const natW = img.naturalWidth || 800;
+  const natH = img.naturalHeight || 800;
+  const scale = Math.min(1, LOGO_MAX_PX / Math.max(natW, natH));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(natW * scale));
+  canvas.height = Math.max(1, Math.round(natH * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: removeWhite });
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  if (removeWhite) {
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const px = data.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const min = Math.min(px[i], px[i + 1], px[i + 2]);
+      if (min > 245) px[i + 3] = 0;
+      else if (min > 215) px[i + 3] = Math.round(px[i + 3] * ((245 - min) / 30)); // borda suave
+    }
+    ctx.putImageData(data, 0, 0);
+  }
+  const blob =
+    (await new Promise((r) => canvas.toBlob(r, "image/webp", 0.92))) ||
+    (await new Promise((r) => canvas.toBlob(r, "image/png")));
+  return readAsDataUrl(blob);
+}
+
+async function setLogoFromFile(file) {
+  const label = $("#logoPickText");
+  label.textContent = "Processando…";
+  $("#logoPickLabel").classList.add("is-loading");
+  try {
+    const url = await processLogoFile(file, $("#logoRemoveWhite").checked);
+    const info = await getArtVisibleBounds(url);
+    const side = getActiveSideState();
+    const pc = getPrintCm(state.product);
+    const prev = side.logo;
+    side.logo = {
+      name: file.name.replace(/\.\w+$/, "").slice(0, 60) || "logo",
+      url,
+      aspect: info.aspect,
+      bounds: info.bounds,
+      widthCm: prev ? prev.widthCm : Math.min(pc.width * 0.45, pc.height * 0.45 * info.aspect),
+      x: prev?.x || 0,
+      y: prev?.y || 0,
+      rotation: prev?.rotation || 0,
+    };
+    constrainDesign("logo", side.logo, pc);
+    state.logoFiles[state.activeSide] = file;
+    state.selected = "logo";
+    renderStage();
+    renderSideToggle();
+    syncLogoControls();
+  } catch (err) {
+    toast(err.message || "Não foi possível usar esta imagem.", "error", 5000);
+  } finally {
+    $("#logoPickLabel").classList.remove("is-loading");
+    syncLogoControls();
+  }
+}
+
+function syncLogoControls() {
+  const side = getActiveSideState();
+  const logo = side?.logo;
+  $("#logoThumb").classList.toggle("has-image", !!logo);
+  $("#logoThumb").innerHTML = logo
+    ? `<img src="${escapeHtml(logo.url)}" alt="Sua logo" />`
+    : `<svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  $("#logoPickText").textContent = logo ? "Trocar logo" : "Enviar minha logo";
+  $("#logoRemoveWhite").disabled = !!logo && !state.logoFiles[state.activeSide];
+  $("#resetLogoPosition").disabled = !logo;
+  $("#removeLogo").disabled = !logo;
+}
+
+function bindLogoEvents() {
+  $("#customerLogoFile").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (file) setLogoFromFile(file);
+  });
+  $("#logoRemoveWhite").addEventListener("change", () => {
+    const file = state.logoFiles[state.activeSide];
+    if (file && getActiveSideState().logo) setLogoFromFile(file);
+  });
+  $("#resetLogoPosition").addEventListener("click", () => centerDesign("logo"));
+  $("#removeLogo").addEventListener("click", () => {
+    const side = getActiveSideState();
+    if (!side.logo) return;
+    side.logo = null;
+    delete state.logoFiles[state.activeSide];
+    if (state.selected === "logo") state.selected = null;
+    renderStage();
+    renderSideToggle();
+    syncLogoControls();
+  });
 }
 
 async function ensureTextFont() {
@@ -754,6 +961,7 @@ function bindEditorEvents() {
     renderSideToggle();
     renderArtList();
     syncTextControls();
+    syncLogoControls();
     renderStage();
     ensureTextFont();
   });
@@ -764,6 +972,7 @@ function bindEditorEvents() {
     state.color = color;
     renderColorOptions();
     stage.root.style.setProperty("--product-color", color);
+    updateSummaries();
   });
 
   $("#sizeOptions").addEventListener("click", (e) => {
@@ -771,6 +980,7 @@ function bindEditorEvents() {
     if (!size) return;
     state.size = size;
     renderSizeOptions();
+    updateSummaries();
   });
 
   $("#finishOptions").addEventListener("change", (e) => {
@@ -780,13 +990,6 @@ function bindEditorEvents() {
     renderStage();
   });
 
-  $("#artToggle").addEventListener("click", () => {
-    const panel = $("#artListPanel");
-    const open = panel.hidden;
-    panel.hidden = !open;
-    $("#artToggle").setAttribute("aria-expanded", String(open));
-    $("#artToggle").textContent = open ? "Ocultar" : "Mostrar";
-  });
   $("#artCategories").addEventListener("click", (e) => {
     const cat = e.target.closest("[data-category]")?.dataset.category;
     if (!cat) return;
@@ -814,6 +1017,7 @@ function bindEditorEvents() {
     }
     syncTextSizeControl();
     renderSideToggle();
+    updateSummaries();
   });
 
   $("#fontPickerButton").addEventListener("click", openFontPicker);
@@ -838,27 +1042,9 @@ function bindEditorEvents() {
     syncTextSizeControl();
   });
 
-  $("#resetArtPosition").addEventListener("click", () => {
-    const side = getActiveSideState();
-    if (!side.art) return;
-    side.art.x = 0;
-    side.art.y = 0;
-    constrainDesign("art", side.art, getPrintCm(state.product));
-    setSelected("art");
-    refreshDesign("art");
-  });
-  $("#resetCustomNamePosition").addEventListener("click", () => {
-    const side = getActiveSideState();
-    if (!side.text.value.trim()) return;
-    side.text.x = 0;
-    side.text.y = 0;
-    constrainDesign("text", side.text, getPrintCm(state.product));
-    setSelected("text");
-    refreshDesign("text");
-  });
+  $("#centerSelected").addEventListener("click", () => centerDesign(state.selected));
   $("#rotateReset").addEventListener("click", () => {
-    const side = getActiveSideState();
-    const obj = state.selected === "art" ? side.art : state.selected === "text" ? side.text : null;
+    const obj = state.selected ? getActiveSideState()[state.selected] : null;
     if (!obj) return;
     obj.rotation = 0;
     constrainDesign(state.selected, obj, getPrintCm(state.product));
@@ -866,6 +1052,8 @@ function bindEditorEvents() {
     updateStageTools();
   });
   $("#removeSelected").addEventListener("click", removeSelected);
+  bindLogoEvents();
+  setupAccordion();
 
   $("#qtyMinus").addEventListener("click", () => {
     state.quantity = clamp(state.quantity - 1, 1, MAX_QTY);
@@ -1036,18 +1224,18 @@ function addToCart() {
   const p = state.product;
   if (p.sizes?.length > 1 && !state.size) {
     $("#sizeGroup").classList.add("is-invalid");
-    $("#sizeGroup").scrollIntoView({ block: "center", behavior: "smooth" });
+    openSection("sizeGroup");
     toast("Escolha um tamanho antes de continuar.", "error");
     return;
   }
   if (getFinishes().length && !state.finishId) {
     $("#finishGroup").classList.add("is-invalid");
-    $("#finishGroup").scrollIntoView({ block: "center", behavior: "smooth" });
+    openSection("finishGroup");
     toast("Escolha o acabamento (adesivo ou gravação).", "error");
     return;
   }
   const hasContent = ["front", "back"].some((k) => (k === "front" || p.allowsBack) && sideHasContent(state.sides[k]));
-  if (!hasContent && !window.confirm("Você não adicionou estampa nem texto. Deseja adicionar o produto liso?")) return;
+  if (!hasContent && !window.confirm("Você não adicionou estampa, logo nem texto. Deseja adicionar o produto liso?")) return;
 
   const item = snapshotCurrentItem();
   const i = state.cart.findIndex((c) => c.item_id === item.item_id);
@@ -1079,6 +1267,7 @@ function itemSpecs(item) {
     if (!s) continue;
     const bits = [];
     if (s.estampa_nome) bits.push(`${s.estampa_nome} (${formatNumber(s.estampa_dimensoes_cm.largura)} × ${formatNumber(s.estampa_dimensoes_cm.altura)} cm)`);
+    if (s.logo_url) bits.push(`Sua logo (${formatNumber(s.logo_dimensoes_cm.largura)} × ${formatNumber(s.logo_dimensoes_cm.altura)} cm)`);
     if (s.texto) bits.push(`“${s.texto}” em ${s.texto_fonte}`);
     specs.push([label, bits.join(" + ")]);
   }
@@ -1504,6 +1693,22 @@ function buildOrderData() {
   };
 }
 
+/** No modo nuvem, envia as logos dos clientes ao Storage e troca o data URL pelo link do arquivo. */
+async function uploadCustomerLogos(itens) {
+  if (typeof store.uploadDataUrl !== "function") return;
+  const uploaded = new Map();
+  for (const item of itens) {
+    for (const key of ["frente", "costas"]) {
+      const side = item[key];
+      if (!side?.logo_url?.startsWith("data:")) continue;
+      if (!uploaded.has(side.logo_url)) {
+        uploaded.set(side.logo_url, await store.uploadDataUrl(side.logo_url, { folder: "customer-logos", name: side.logo_nome }));
+      }
+      side.logo_url = uploaded.get(side.logo_url);
+    }
+  }
+}
+
 async function placeOrder() {
   if (navigator.onLine === false || store?.degraded) return updateOnlineState();
   if (!state.payment) {
@@ -1517,7 +1722,9 @@ async function placeOrder() {
   btn.classList.add("is-loading");
   btn.textContent = "Enviando pedido…";
   try {
-    state.lastOrder = await store.createOrder(buildOrderData());
+    const data = buildOrderData();
+    await uploadCustomerLogos(data.itens);
+    state.lastOrder = await store.createOrder(data);
     state.cart = [];
     saveCart();
     state.customer = emptyCustomer();

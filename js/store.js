@@ -518,6 +518,14 @@ class FirebaseBackend {
     });
     return this.s.getDownloadURL(ref);
   }
+  /** Upload público (sem login) da logo enviada pelo cliente — limitado por storage.rules. */
+  async uploadDataUrl(dataUrl, { folder = "customer-logos", name = "logo" } = {}) {
+    const blob = await (await fetch(dataUrl)).blob();
+    const ext = { "image/webp": ".webp", "image/png": ".png", "image/jpeg": ".jpg", "image/svg+xml": ".svg" }[blob.type] || "";
+    const ref = this.s.ref(this.storage, `${folder}/${todayStamp()}/${Date.now()}-${slugify(name) || "logo"}${ext}`);
+    await this.s.uploadBytes(ref, blob, { contentType: blob.type || "image/png" });
+    return this.s.getDownloadURL(ref);
+  }
   async deleteFile(url) {
     if (!url || !url.includes("firebasestorage")) return;
     try {

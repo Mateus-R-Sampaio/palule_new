@@ -433,6 +433,12 @@ function sideSpecs(s) {
     rows.push(["Posição (centro)", pos(s.estampa_posicao_cm)]);
     rows.push(["Rotação", `${formatNumber(s.estampa_rotacao_graus || 0)}°`]);
   }
+  if (s.logo_url) {
+    rows.push(["Logo do cliente", `<img class="logo-spec-thumb" src="${escapeHtml(s.logo_url)}" alt="" /> <a href="${escapeHtml(s.logo_url)}" target="_blank" rel="noopener" download="${escapeHtml(slugify(s.logo_nome || "logo"))}">baixar arquivo</a>`]);
+    rows.push(["Dimensões", dims(s.logo_dimensoes_cm)]);
+    rows.push(["Posição (centro)", pos(s.logo_posicao_cm)]);
+    rows.push(["Rotação", `${formatNumber(s.logo_rotacao_graus || 0)}°`]);
+  }
   if (s.texto) {
     const font = FONT_CATALOG.find((f) => f.id === s.texto_fonte_id);
     rows.push(["Texto", `<span class="text-sample" style="font-family:${escapeHtml(s.texto_fonte_css || "")};color:${escapeHtml(s.texto_cor)};${isLight(s.texto_cor) ? "background:#2a2f40;" : ""}">${escapeHtml(s.texto)}</span>`]);

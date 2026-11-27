@@ -3,7 +3,7 @@
 // • Fontes, bibliotecas e SDK do Firebase (CDNs): cache-first.
 // • Firestore/Storage/Auth e APIs externas: nunca passam pelo cache.
 
-const VERSION = "studio-personalizado-v2";
+const VERSION = "studio-personalizado-v3";
 const SHELL = [
   "./",
   "index.html",
