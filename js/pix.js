@@ -2,10 +2,7 @@
 // Especificação: Manual de Padrões para Iniciação do Pix (Banco Central do Brasil).
 
 // qrcode-generator 1.4.4 (MIT, Kazuhiko Arase) embutido em js/vendor para funcionar offline no totem.
-const QR_SOURCES = [
-  new URL("./vendor/qrcode.js", import.meta.url).href,
-  "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js",
-];
+const QR_SOURCES = [new URL("./vendor/qrcode.js", import.meta.url).href];
 
 const tlv = (id, value) => {
   const v = String(value);

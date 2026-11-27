@@ -95,7 +95,7 @@
           <p class="muted">PNG com fundo transparente, SVG ou WebP. Você pode selecionar vários arquivos de uma vez.</p>
           <div class="upload-row">
             <label class="dropzone" id="artDropzone">
-              <input type="file" id="artFiles" accept="image/png,image/svg+xml,image/webp" multiple />
+              <input type="file" id="artFiles" accept="image/png,image/svg+xml,image/webp,image/jpeg" multiple />
               <span><strong>Clique para escolher</strong> ou arraste os arquivos aqui</span>
             </label>
             <div class="field">
@@ -244,14 +244,16 @@
           </div>
         </form>
 
-        <form class="admin-card" id="credentialsForm" hidden>
-          <h2>Acesso ao painel (modo local)</h2>
-          <p class="muted">No modo local o login é apenas uma proteção básica deste navegador. Para segurança real, conecte o Firebase Authentication.</p>
+        <form class="admin-card" id="credentialsForm" autocomplete="on">
+          <h2>Alterar minha senha</h2>
+          <p class="muted">Use pelo menos 12 caracteres com letras e números. Ao trocar, as sessões abertas em outros aparelhos são encerradas.</p>
           <div class="form-grid">
-            <div class="field"><label for="credEmail">E-mail</label><input id="credEmail" type="email" autocomplete="username" required /></div>
-            <div class="field"><label for="credPassword">Nova senha</label><input id="credPassword" type="password" minlength="6" autocomplete="new-password" required /></div>
+            <div class="field span-2"><label for="credEmail">Conta</label><input id="credEmail" type="email" autocomplete="username" readonly /></div>
+            <div class="field span-2"><label for="credCurrent">Senha atual</label><input id="credCurrent" type="password" autocomplete="current-password" required /></div>
+            <div class="field"><label for="credPassword">Nova senha</label><input id="credPassword" type="password" minlength="12" autocomplete="new-password" required /></div>
+            <div class="field"><label for="credConfirm">Confirmar nova senha</label><input id="credConfirm" type="password" minlength="12" autocomplete="new-password" required /></div>
           </div>
-          <div class="settings-actions"><button type="submit" class="btn btn-dark">Alterar acesso</button></div>
+          <div class="settings-actions"><button type="submit" class="btn btn-dark">Alterar senha</button></div>
         </form>
 
         <div class="admin-card" id="backendInfo"></div>
@@ -307,13 +309,13 @@
                 <span class="field-label">Frente</span>
                 <div class="mockup-thumb" id="pfMockFrontThumb"></div>
                 <label class="btn btn-ghost btn-sm file-button"><input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" data-mock-file="front" />Enviar imagem</label>
-                <input class="url-input" id="pfMockFront" placeholder="ou cole uma URL" />
+                <input class="url-input" id="pfMockFront" placeholder="nenhuma imagem enviada" readonly aria-label="Arquivo da frente" />
               </div>
               <div class="mockup-upload" data-side="back" id="pfBackMockup">
                 <span class="field-label">Costas</span>
                 <div class="mockup-thumb" id="pfMockBackThumb"></div>
                 <label class="btn btn-ghost btn-sm file-button"><input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" data-mock-file="back" />Enviar imagem</label>
-                <input class="url-input" id="pfMockBack" placeholder="ou cole uma URL" />
+                <input class="url-input" id="pfMockBack" placeholder="nenhuma imagem enviada" readonly aria-label="Arquivo das costas" />
               </div>
             </div>
             <p class="muted small">Para colorir automaticamente, use o produto em branco/cinza claro com fundo transparente.</p>

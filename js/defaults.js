@@ -1,6 +1,6 @@
 // Catálogo e configurações padrão.
-// Usados no modo local (sem Firebase), como fallback offline e para
-// "Importar catálogo padrão" no painel admin quando o Firestore está vazio.
+// NÃO são o banco de dados: servem só como valores-base das configurações e como
+// fonte do comando `npm run seed`, que importa este catálogo para o PostgreSQL.
 
 export const DEFAULT_SETTINGS = {
   brandName: "Studio",

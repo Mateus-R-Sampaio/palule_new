@@ -1,5 +1,8 @@
 // Envio de notificações: e-mail + mensagem (WhatsApp/SMS).
-// Provedores configuráveis por variáveis de ambiente (veja .env.example).
+// Provedores configuráveis por variáveis de ambiente (veja server/.env.example).
+// Disparado pelo servidor ao criar o pedido e a cada mudança de status.
+
+import { query, one } from "./db.js";
 
 const STATUS_LABELS = {
   AGUARDANDO_PAGAMENTO: "Aguardando pagamento",
@@ -155,7 +158,7 @@ async function sendEmail(order) {
   }
 
   if (provider === "smtp") {
-    const nodemailer = require("nodemailer");
+    const { default: nodemailer } = await import("nodemailer");
     const transport = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
@@ -274,4 +277,38 @@ async function notifyOrder(order) {
   return result;
 }
 
-module.exports = { notifyOrder, buildMessageText, buildEmail, statusLabel, phoneE164 };
+/**
+ * Carrega o pedido do banco, envia as mensagens e grava o resultado em orders.notificacoes.
+ * Roda em segundo plano: nunca atrasa nem derruba a resposta ao cliente/admin.
+ */
+export function notifyOrderAsync(orderId) {
+  setImmediate(async () => {
+    try {
+      const r = await one(
+        `SELECT numero, codigo_curto, modalidade, cliente_nome, cliente_telefone, cliente_email, endereco, itens,
+                taxa_entrega, valor_total, metodo_pagamento, status_pagamento, status_producao, notificacoes
+           FROM orders WHERE id = $1`,
+        [orderId]
+      );
+      if (!r) return;
+      const order = {
+        numero_pedido: r.numero,
+        codigo_curto: r.codigo_curto,
+        modalidade: r.modalidade,
+        cliente: { nome: r.cliente_nome, telefone: r.cliente_telefone, email: r.cliente_email, endereco: r.endereco },
+        itens: r.itens,
+        taxa_entrega: r.taxa_entrega,
+        valor_total: r.valor_total,
+        metodo_pagamento: r.metodo_pagamento,
+        status_pagamento: r.status_pagamento,
+        status_producao: r.status_producao,
+      };
+      const result = await notifyOrder(order);
+      await query("UPDATE orders SET notificacoes = notificacoes || $2::jsonb WHERE id = $1", [orderId, JSON.stringify(result)]);
+    } catch (err) {
+      console.error("Falha ao notificar pedido", orderId, err.message);
+    }
+  });
+}
+
+export { notifyOrder, buildMessageText, buildEmail, statusLabel, phoneE164 };

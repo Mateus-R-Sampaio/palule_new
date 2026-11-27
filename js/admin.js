@@ -5,12 +5,12 @@ import {
   formatDateTime, timeAgo, statusLabel, STATUS_FLOW, PAYMENT_LABELS, PAYMENT_STATUS_LABELS, MODE_LABELS,
   applyBrandColor, deepClone, registerServiceWorker,
 } from "./utils.js";
-import { createStore, DEFAULT_LOCAL_ADMIN } from "./store.js";
+import { adminApi as store, isCrossOrigin } from "./store.js";
+import { API_BASE } from "./config.js";
 import { DEFAULT_SETTINGS } from "./defaults.js";
 import { FONT_CATALOG, FONT_SOURCES, FONT_CATEGORIES, getAvailableFonts, loadFont, loadFontForText, fontStack, customFontToEntry } from "./fonts.js";
 import { buildStage, fromOrderSide, getPrintCm, getArtVisibleBounds, SIDE_LABELS } from "./render.js";
 
-let store;
 
 const state = {
   user: null,
@@ -32,7 +32,11 @@ const state = {
 /* ====================================================================== */
 
 async function boot() {
-  store = await createStore();
+  // O painel só funciona no domínio do servidor (cookie de sessão SameSite=Strict).
+  if (isCrossOrigin()) {
+    location.replace(`${String(API_BASE).replace(/\/+$/, "")}/admin.html`);
+    return;
+  }
   bindLogin();
   bindTabs();
   bindOrders();
@@ -41,18 +45,27 @@ async function boot() {
   bindFonts();
   bindSettings();
   registerServiceWorker();
-
-  store.onAuthChange(async (user) => {
-    state.user = user;
-    if (!user) return showLogin();
-    if (user.notAdmin) {
-      showLogin(`A conta ${user.email} não tem permissão de administrador. Adicione o documento admins/${user.uid} no Firestore.`);
-      await store.signOut();
-      return;
-    }
-    await showApp();
-  });
+  try {
+    state.user = await store.me();
+  } catch (err) {
+    return showLogin(err.message);
+  }
+  if (state.user) await showApp();
+  else showLogin();
 }
+
+/** Sessão expirou ou foi encerrada em outro lugar: volta para o login. */
+function handleAuthError(err) {
+  if (err?.status === 401) {
+    state.user = null;
+    showLogin("Sua sessão expirou. Entre novamente.");
+    return true;
+  }
+  return false;
+}
+window.addEventListener("unhandledrejection", (e) => {
+  if (handleAuthError(e.reason)) e.preventDefault();
+});
 
 function showLogin(error = "") {
   state.unsubscribeOrders?.();
@@ -62,16 +75,8 @@ function showLogin(error = "") {
   const err = $("#loginError");
   err.hidden = !error;
   err.textContent = error;
-  const hint = $("#loginHint");
-  if (store.mode === "local") {
-    hint.hidden = false;
-    hint.innerHTML = store.usesDefaultCredentials()
-      ? `<strong>Modo local (demonstração).</strong> Acesso inicial: <code>${DEFAULT_LOCAL_ADMIN.email}</code> / <code>${DEFAULT_LOCAL_ADMIN.password}</code>. Altere a senha em “Marca &amp; Config.”.`
-      : `<strong>Modo local (demonstração).</strong> Os dados ficam apenas neste navegador.`;
-  } else {
-    hint.hidden = true;
-  }
-  $("#forgotPassword").hidden = store.mode !== "firebase";
+  $("#loginHint").hidden = true;
+  $("#forgotPassword").hidden = false;
   setTimeout(() => $("#loginEmail").focus(), 50);
 }
 
@@ -83,8 +88,10 @@ function bindLogin() {
     btn.classList.add("is-loading");
     $("#loginError").hidden = true;
     try {
-      await store.signIn($("#loginEmail").value, $("#loginPassword").value);
+      const { user } = await store.signIn($("#loginEmail").value, $("#loginPassword").value);
       $("#loginPassword").value = "";
+      state.user = user;
+      await showApp();
     } catch (err) {
       $("#loginError").textContent = err.message;
       $("#loginError").hidden = false;
@@ -93,17 +100,14 @@ function bindLogin() {
       btn.classList.remove("is-loading");
     }
   });
-  $("#forgotPassword").addEventListener("click", async () => {
-    const email = $("#loginEmail").value.trim();
-    if (!email) return toast("Digite seu e-mail primeiro.", "warning");
-    try {
-      await store.sendPasswordReset(email);
-      toast("Enviamos um link de redefinição para o seu e-mail.", "success");
-    } catch (err) {
-      toast(err.message, "error");
-    }
+  $("#forgotPassword").addEventListener("click", () => {
+    toast("Peça ao responsável técnico para redefinir no servidor: npm run create-admin -- seu@email", "info", 8000);
   });
-  $("#logoutButton").addEventListener("click", () => store.signOut());
+  $("#logoutButton").addEventListener("click", async () => {
+    await store.signOut().catch(() => {});
+    state.user = null;
+    showLogin();
+  });
 }
 
 async function showApp() {
@@ -111,13 +115,14 @@ async function showApp() {
   $("#adminApp").hidden = false;
   $("#userEmail").textContent = state.user.email;
   const badge = $("#modeBadge");
-  badge.textContent = store.mode === "firebase" ? "Firebase conectado" : "Modo local";
-  badge.classList.toggle("is-local", store.mode !== "firebase");
+  badge.textContent = "Servidor seguro";
+  badge.classList.remove("is-local");
   await loadAll();
   if (!state.unsubscribeOrders) {
-    state.unsubscribeOrders = store.subscribeOrders(onOrders, () => {
-      $("#liveStatus").textContent = "Sem conexão em tempo real";
-      $("#liveStatus").classList.add("is-off");
+    state.unsubscribeOrders = store.subscribeOrders(onOrders, (err) => {
+      if (err && handleAuthError(err)) return;
+      $("#liveStatus").textContent = err ? "Sem conexão com o servidor" : "Tempo real";
+      $("#liveStatus").classList.toggle("is-off", !!err);
     });
   }
   selectTab(location.hash.replace("#", "") || state.tab, false);
@@ -125,12 +130,7 @@ async function showApp() {
 
 async function loadAll() {
   try {
-    const [settings, products, arts, fonts] = await Promise.all([
-      store.getSettings(),
-      store.listProducts(),
-      store.listArts(),
-      store.listCustomFonts(),
-    ]);
+    const { settings, products, arts, customFonts: fonts } = await store.bootstrap();
     state.settings = settings;
     state.products = products;
     state.arts = arts;
@@ -271,7 +271,7 @@ function filteredOrders() {
 
 function notificationBadge(o) {
   const n = o.notificacoes || {};
-  if (store.mode !== "firebase" || n.modo === "local") return `<span class="badge badge-muted" title="Modo local: envie manualmente">Aviso manual</span>`;
+  if (!state.settings.notificationsEnabled) return `<span class="badge badge-muted" title="Notificações automáticas não configuradas no servidor">Aviso manual</span>`;
   if (n.email_erro || n.mensagem_erro) return `<span class="badge badge-danger" title="${escapeHtml(n.email_erro || n.mensagem_erro)}">Falha no aviso</span>`;
   if (n.email_enviado || n.mensagem_enviada) {
     const ch = [n.mensagem_enviada ? "Msg" : null, n.email_enviado ? "E-mail" : null].filter(Boolean).join(" + ");
@@ -344,9 +344,9 @@ async function advanceOrder(order) {
   try {
     await store.setOrderStatus(order.id, next, extra);
     toast(
-      store.mode === "firebase"
+      state.settings.notificationsEnabled
         ? `#${order.codigo_curto} → ${statusLabel(next, order.modalidade)}. Notificando o cliente…`
-        : `#${order.codigo_curto} → ${statusLabel(next, order.modalidade)} (modo local: avise o cliente manualmente).`,
+        : `#${order.codigo_curto} → ${statusLabel(next, order.modalidade)} (notificações automáticas desativadas: avise o cliente pelos atalhos do pedido).`,
       "success"
     );
   } catch (err) {
@@ -527,16 +527,16 @@ function renderOrderDrawer(o) {
       <div>
         <h3>Notificações</h3>
         ${
-          store.mode === "firebase" && n.modo !== "local"
+          state.settings.notificationsEnabled
             ? `<dl class="spec-table">
                 <div><dt>WhatsApp/SMS</dt><dd>${n.mensagem_enviada ? "✓ enviada" : n.mensagem_erro ? `✗ ${escapeHtml(n.mensagem_erro)}` : "pendente"}${n.canal_mensagem ? ` <span class="tag">${escapeHtml(n.canal_mensagem)}</span>` : ""}</dd></div>
                 <div><dt>E-mail</dt><dd>${n.email_enviado ? "✓ enviado" : n.email_erro ? `✗ ${escapeHtml(n.email_erro)}` : "pendente"}${n.canal_email ? ` <span class="tag">${escapeHtml(n.canal_email)}</span>` : ""}</dd></div>
                 <div><dt>Último envio</dt><dd>${escapeHtml(formatDateTime(n.ultimo_disparo_em))}${n.ultimo_status_notificado ? ` · ${escapeHtml(statusLabel(n.ultimo_status_notificado, o.modalidade))}` : ""}</dd></div>
               </dl>`
-            : `<p class="muted small">Modo local: as mensagens automáticas não são enviadas. Use os atalhos abaixo para avisar o cliente.</p>`
+            : `<p class="muted small">Notificações automáticas não configuradas no servidor (EMAIL_PROVIDER / MESSAGE_PROVIDER). Use os atalhos abaixo para avisar o cliente.</p>`
         }
         <div class="inline-actions">
-          ${store.mode === "firebase" ? `<button type="button" class="btn btn-ghost btn-sm" data-act="resend">Reenviar notificação</button>` : ""}
+          ${state.settings.notificationsEnabled ? `<button type="button" class="btn btn-ghost btn-sm" data-act="resend">Reenviar notificação</button>` : ""}
           <a class="btn btn-ghost btn-sm" href="${whatsappLink(o)}" target="_blank" rel="noopener">Abrir WhatsApp</a>
           <a class="btn btn-ghost btn-sm" href="${mailLink(o)}">Abrir e-mail</a>
         </div>
@@ -601,7 +601,11 @@ function renderOrderDrawer(o) {
   actions.querySelector('[data-act="next"]')?.addEventListener("click", () => advanceOrder(o));
   actions.querySelector('[data-act="back"]')?.addEventListener("click", () => revertOrder(o));
   actions.querySelector('[data-act="pay"]').addEventListener("click", async () => {
-    await store.updateOrder(o.id, { status_pagamento: o.status_pagamento === "PAGO" ? "PENDENTE" : "PAGO" });
+    try {
+      await store.setOrderPayment(o.id, o.status_pagamento === "PAGO" ? "PENDENTE" : "PAGO");
+    } catch (err) {
+      if (!handleAuthError(err)) toast(err.message, "error");
+    }
   });
   actions.querySelector('[data-act="delete"]').addEventListener("click", async () => {
     if (!window.confirm(`Excluir definitivamente o pedido #${o.codigo_curto}?`)) return;
@@ -621,9 +625,9 @@ let areaSide = "front";
 
 function renderProducts() {
   const host = $("#productList");
-  $("#importDefaults").hidden = !(store.mode === "firebase" && !state.products.length);
+  $("#importDefaults").hidden = true;
   if (!state.products.length) {
-    host.innerHTML = `<div class="admin-card empty-card"><p>Nenhum produto cadastrado.</p>${store.mode === "firebase" ? "<p class=muted>Use “Importar catálogo padrão” para começar com os 4 produtos de exemplo.</p>" : ""}</div>`;
+    host.innerHTML = `<div class="admin-card empty-card"><p>Nenhum produto cadastrado.</p>${false ? "<p class=muted>Use “Importar catálogo padrão” para começar com os 4 produtos de exemplo.</p>" : ""}</div>`;
     return;
   }
   host.innerHTML = "";
@@ -911,7 +915,7 @@ function renderFinishEditor() {
 async function uploadMockup(file, side) {
   try {
     toast("Enviando imagem…");
-    const url = await store.uploadFile(file, { folder: "mockups", maxSize: 1600 });
+    const url = await store.uploadFile(file, { folder: "mockups" });
     $(side === "front" ? "#pfMockFront" : "#pfMockBack").value = url;
     readProductForm();
     renderProductPreview();
@@ -934,7 +938,7 @@ function bindCatalog() {
   $("#importDefaults").addEventListener("click", async () => {
     if (!window.confirm("Importar os 4 produtos e as 27 estampas de exemplo?")) return;
     try {
-      await store.importDefaults();
+      throw new Error("Use no servidor: npm run seed");
       await loadAll();
       toast("Catálogo padrão importado.", "success");
     } catch (err) {
@@ -1082,17 +1086,14 @@ async function uploadArts(files) {
   for (const [i, file] of [...files].entries()) {
     status.textContent = `Enviando ${i + 1} de ${files.length}: ${file.name}…`;
     try {
-      const url = await store.uploadFile(file, { folder: "arts", maxSize: 1600 });
-      const art = {
-        id: uid("art"),
-        name: file.name.replace(/\.\w+$/, "").replace(/[-_]+/g, " "),
+      const fileUrl = await store.uploadFile(file, { folder: "arts" });
+      const art = await store.createArt({
+        name: file.name.replace(/\.\w+$/, "").replace(/[-_]+/g, " ").slice(0, 120) || "Estampa",
         category,
-        url,
+        fileUrl,
         active: true,
-        order: Date.now() + i,
-        createdAt: new Date().toISOString(),
-      };
-      await store.saveArt(art);
+        order: Date.now() % 1_000_000_000 + i,
+      });
       state.arts.push(art);
       ok += 1;
     } catch (err) {
@@ -1143,7 +1144,7 @@ function bindArts() {
     const value = field === "active" ? e.target.checked : e.target.value.trim();
     if (field === "name" && !value) return renderArts();
     try {
-      await store.saveArt({ ...art, [field]: value });
+      await store.updateArt(art.id, { [field]: value });
       art[field] = value;
       if (field === "active") renderArts();
       toast("Estampa atualizada.", "success", 1600);
@@ -1278,7 +1279,7 @@ function bindFonts() {
       defaultFontId = firstEnabled?.id || "g-montserrat";
     }
     try {
-      state.settings = await store.saveSettings({ disabledFonts: [...state.disabledFonts], defaultFontId });
+      state.settings = await saveSettings({ disabledFonts: [...state.disabledFonts], defaultFontId });
       renderFonts();
       toast("Tipografias salvas.", "success");
     } catch (err) {
@@ -1295,20 +1296,11 @@ function bindFonts() {
     const btn = $("#fontUploadButton");
     btn.disabled = true;
     try {
-      const url = await store.uploadFile(file, { folder: "fonts" });
-      const font = {
-        id: `custom-${slugify(family)}-${Date.now().toString(36)}`,
-        family,
-        url,
-        category: $("#fontCategorySelect").value,
-        source: "custom",
-        active: true,
-        createdAt: new Date().toISOString(),
-      };
-      // valida que o navegador consegue ler o arquivo
-      const ok = await loadFont(customFontToEntry(font));
+      const fileUrl = await store.uploadFile(file, { folder: "fonts" });
+      // o navegador precisa conseguir ler o arquivo antes de liberar para os clientes
+      const ok = await loadFont(customFontToEntry({ id: `tmp-${Date.now()}`, family, url: fileUrl, category: "display" }));
       if (!ok) throw new Error("O arquivo não parece ser uma fonte válida.");
-      await store.saveFont(font);
+      const font = await store.createFont({ family, category: $("#fontCategorySelect").value, fileUrl });
       state.customFonts.push(font);
       e.target.reset();
       renderFonts();
@@ -1324,8 +1316,12 @@ function bindFonts() {
     if (!e.target.matches("[data-custom-toggle]")) return;
     const id = e.target.closest("[data-font-id]").dataset.fontId;
     const font = state.customFonts.find((f) => f.id === id);
-    font.active = e.target.checked;
-    await store.saveFont(font);
+    try {
+      await store.updateFont(id, { active: e.target.checked });
+      font.active = e.target.checked;
+    } catch (err) {
+      if (!handleAuthError(err)) toast(err.message, "error");
+    }
     renderFonts();
   });
   $("#customFontList").addEventListener("click", async (e) => {
@@ -1333,8 +1329,12 @@ function bindFonts() {
     const id = e.target.closest("[data-font-id]").dataset.fontId;
     const font = state.customFonts.find((f) => f.id === id);
     if (!window.confirm(`Excluir a fonte “${font.family}”?`)) return;
-    await store.deleteFont(id);
-    await store.deleteFile(font.url);
+    try {
+      await store.deleteFont(id);
+    } catch (err) {
+      if (!handleAuthError(err)) toast(err.message, "error");
+      return;
+    }
     state.customFonts = state.customFonts.filter((f) => f.id !== id);
     renderFonts();
   });
@@ -1360,12 +1360,16 @@ function renderSettings() {
     else input.value = value ?? "";
   }
   renderLogoPreview();
-  $("#credentialsForm").hidden = store.mode !== "local";
   $("#credEmail").value = state.user?.email || "";
-  $("#backendInfo").innerHTML =
-    store.mode === "firebase"
-      ? `<h2>Conexão</h2><p><span class="badge badge-success">Firebase conectado</span> Pedidos, catálogo, estampas e arquivos ficam na nuvem e sincronizam em tempo real entre todos os dispositivos. As notificações por WhatsApp/SMS e e-mail são enviadas pelas Cloud Functions (veja o README).</p>`
-      : `<h2>Conexão</h2><p><span class="badge badge-warning">Modo local</span> Os dados ficam somente neste navegador. Para usar loja e painel em dispositivos diferentes, com login seguro e notificações automáticas, copie <code>firebase-config.example.js</code> para <code>firebase-config.js</code> com as credenciais do seu projeto Firebase (passo a passo no README).</p>`;
+  $("#backendInfo").innerHTML = `<h2>Servidor e banco de dados</h2>
+    <p><span class="badge badge-success">PostgreSQL</span> Pedidos, catálogo, estampas, fontes e imagens ficam no banco do servidor.
+    Cada pedido é conferido pelo servidor (produto, preço, cores, tamanhos, estampas, fontes e medidas) antes de ser gravado.</p>
+    <p>Notificações automáticas: ${state.settings.notificationsEnabled ? '<span class="badge badge-success">ativas</span>' : '<span class="badge badge-warning">não configuradas</span> (defina EMAIL_PROVIDER e/ou MESSAGE_PROVIDER no servidor)'}</p>`;
+}
+
+async function saveSettings(patch) {
+  const flag = state.settings.notificationsEnabled;
+  return { ...(await store.saveSettings(patch)), notificationsEnabled: flag };
 }
 
 function renderLogoPreview() {
@@ -1392,7 +1396,7 @@ function bindSettings() {
     const btn = $("#saveSettings");
     btn.disabled = true;
     try {
-      state.settings = await store.saveSettings(patch);
+      state.settings = await saveSettings(patch);
       applyAdminBranding();
       renderSettings();
       toast("Configurações salvas. A loja usa os novos dados ao recarregar.", "success");
@@ -1408,10 +1412,8 @@ function bindSettings() {
     if (!file) return;
     try {
       toast("Enviando logo…");
-      const url = await store.uploadFile(file, { folder: "brand", maxSize: 800 });
-      const old = state.settings.logoUrl;
-      state.settings = await store.saveSettings({ logoUrl: url });
-      if (old && old !== url) store.deleteFile(old);
+      const url = await store.uploadFile(file, { folder: "brand" });
+      state.settings = await saveSettings({ logoUrl: url });
       applyAdminBranding();
       renderLogoPreview();
       toast("Logo atualizada.", "success");
@@ -1423,21 +1425,24 @@ function bindSettings() {
   });
   $("#removeLogo").addEventListener("click", async () => {
     if (!window.confirm("Remover a logo? O site volta a exibir as iniciais da marca.")) return;
-    const old = state.settings.logoUrl;
-    state.settings = await store.saveSettings({ logoUrl: "" });
-    store.deleteFile(old);
+    state.settings = await saveSettings({ logoUrl: "" });
     applyAdminBranding();
     renderLogoPreview();
   });
 
   $("#credentialsForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const email = $("#credEmail").value.trim();
-    const pw = $("#credPassword").value;
-    if (!email.includes("@") || pw.length < 6) return toast("Informe um e-mail válido e senha com 6+ caracteres.", "error");
-    await store.changeCredentials(email, pw);
-    $("#credPassword").value = "";
-    toast("Acesso alterado.", "success");
+    const current = $("#credCurrent").value;
+    const next = $("#credPassword").value;
+    if (next !== $("#credConfirm").value) return toast("A confirmação não confere com a nova senha.", "error");
+    try {
+      await store.changePassword(current, next);
+      e.target.reset();
+      $("#credEmail").value = state.user?.email || "";
+      toast("Senha alterada. As sessões em outros aparelhos foram encerradas.", "success", 5000);
+    } catch (err) {
+      if (!handleAuthError(err)) toast(err.message, "error", 6000);
+    }
   });
 }
 

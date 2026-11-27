@@ -1,136 +1,144 @@
 # Studio Personalizado
 
-Aplicação web (PWA) para personalização de produtos em tempo real: copos, camisetas, ecobags e bonés. Tem duas áreas:
+Aplicação web (PWA) para personalização de produtos em tempo real: copos, camisetas, ecobags e bonés.
 
-- **Loja / totem (`index.html`)**: o cliente escolhe o produto; aplica estampa, **a própria logo** (com opção de remover fundo branco), texto, cor da letra, tipografia, cor do produto, tamanho e acabamento, em seções retráteis que mantêm a tela limpa; revisa o carrinho com prévia de frente e costas; informa os dados (Evento ou Encomenda com endereço) e escolhe o pagamento (crédito, débito, Pix ou pagar na retirada). No fim, recebe o número do pedido.
-- **Painel admin (`admin.html`)**: login, pedidos em tempo real (Kanban com ficha técnica completa), catálogo e mockups, estampas, tipografias e identidade da marca.
+- **Loja / totem (`/`)**: o cliente escolhe o produto e aplica estampa, **a própria logo**, texto, cor da letra, tipografia, cor do produto, tamanho e acabamento, em seções retráteis. Depois revisa o carrinho com prévia de frente e costas, informa os dados (Evento, ou Encomenda com endereço), escolhe o pagamento (crédito, débito, Pix ou na retirada) e recebe o número do pedido.
+- **Painel (`/admin.html`)**: login, pedidos em tempo real (Kanban com ficha técnica completa), catálogo e mockups, estampas, tipografias e identidade da marca.
 
-## Como rodar
+## Arquitetura
 
-O site é estático (HTML, CSS e JS em módulos), sem etapa de build. Ele só precisa ser servido por HTTP, porque não abre via `file://`:
-
-```bash
-python3 -m http.server 8080
+```
+Navegador (loja / painel)  ──HTTPS──▶  Servidor Node.js (server/)  ──▶  PostgreSQL
+   só exibe e envia escolhas            valida TUDO contra o banco        dados, imagens e fontes
 ```
 
-Depois, abra `http://localhost:8080` (loja) e `http://localhost:8080/admin.html` (painel).
+- **Banco de dados:** PostgreSQL 13 ou superior. Guarda produtos, estampas, fontes, configurações, pedidos, administradores, sessões, auditoria **e os arquivos** (mockups, estampas, logos), tudo em um único lugar para backup.
+- **O navegador não é confiável:** ele envia só as escolhas do cliente. Preço, total, taxa de entrega, número do pedido, status, nomes de estampas e fontes são definidos pelo servidor a partir do banco.
+- A pasta `img/` e o arquivo `js/defaults.js` **não são o banco**: servem só como origem do comando `npm run seed`, que importa o catálogo inicial para o PostgreSQL.
 
-### Modo local (padrão)
+## Segurança
 
-Se o arquivo `firebase-config.js` não existir, tudo fica no navegador (`localStorage`). Serve para demonstração e testes em um único dispositivo. Loja e painel abertos em abas do mesmo navegador se atualizam sozinhos.
+| Ameaça | Proteção |
+| --- | --- |
+| Adulterar preço ou total no navegador | O servidor recalcula tudo com os preços do banco; os valores enviados são ignorados (há teste para isso) |
+| Pedir produto inativo, ou cor, tamanho, acabamento, estampa ou fonte inexistentes | Cada item é conferido no banco; costas só em produtos que permitem |
+| Estampa ou logo fora da área de impressão | O servidor confere medidas e posição em cm contra a área real do produto |
+| Dados malformados, injeção de SQL | Validação estrita (zod) de todos os campos + consultas parametrizadas + `CHECK`/`FK` no banco |
+| Força bruta no login | Limite de tentativas por IP + bloqueio da conta após 5 erros (15 min) + resposta genérica (não revela se o e-mail existe) |
+| Roubo de senha do banco | Senhas com **argon2id**; tokens de sessão guardados só como hash SHA-256 |
+| Sequestro de sessão / CSRF | Cookie `HttpOnly` + `Secure` + `SameSite=Strict` (`__Host-`), checagem de origem e cabeçalho obrigatório em toda alteração |
+| XSS | CSP restritiva (sem script inline nem de terceiros) e textos sempre escapados ao exibir |
+| Upload malicioso | Tipo detectado pelos bytes (não pela extensão); imagens reprocessadas (sem metadados); SVG do admin sem scripts, eventos ou links externos e servido com `sandbox`; clientes só podem enviar PNG/JPG/WebP |
+| Usar a logo de outra pessoa | Cada envio recebe um token secreto; o pedido só aceita a logo com o token certo, e as logos de clientes só são visíveis para administradores |
+| Robôs e spam de pedidos | Limite por IP + campo-armadilha |
+| Vazamento de arquivos do servidor | Só os arquivos do site são servidos (lista fixa); `.env`, código e `.git` dão 404 |
+| Clickjacking, sniffing, downgrade | `frame-ancestors 'none'`, `nosniff`, HSTS, `Referrer-Policy`, `Permissions-Policy` |
+| Auditoria | Login, falhas, bloqueios e toda alteração no painel ficam em `audit_log` |
+| LGPD | O IP do pedido é guardado só como HMAC (pseudonimizado); pedidos e dados de clientes só são acessíveis no painel |
 
-- Login inicial do painel: **`admin@studio.local` / `admin123`**. Altere em *Marca & Config.*
-- Nesse modo, as notificações automáticas não são enviadas. O painel oferece atalhos para avisar o cliente pelo WhatsApp e por e-mail manualmente.
+Os testes automáticos (`npm test`) atacam a API de propósito e conferem cada proteção acima.
 
-### Modo nuvem (Firebase)
+## Rodar localmente
 
-Use este modo em produção: loja e painel em dispositivos diferentes, login seguro e notificações automáticas.
+Pré-requisitos: Node.js 20.11+ e PostgreSQL 13+.
 
-1. Crie um projeto no [Firebase](https://console.firebase.google.com) e ative **Authentication (e-mail/senha)**, **Firestore**, **Storage** e **Functions** (requer o plano Blaze).
-2. Copie `firebase-config.example.js` para `firebase-config.js` e cole a configuração do app Web.
-3. Em *Authentication*, crie o usuário administrador. No Firestore, crie o documento **`admins/{UID do usuário}`** (pode ser vazio).
-4. Instale a CLI e publique:
-   ```bash
-   npm install -g firebase-tools
-   ```
-   ```bash
-   firebase login
-   ```
-   ```bash
-   firebase use --add
-   ```
-   ```bash
-   cd functions && npm install && cp .env.example .env && cd ..
-   ```
-   ```bash
-   firebase deploy
-   ```
-5. Libere o CORS do Storage. Sem isso, a cor do mockup e o recorte das estampas enviadas não funcionam:
-   ```bash
-   gsutil cors set cors.json gs://SEU-BUCKET
-   ```
-6. No painel, aba *Catálogo*, clique em **Importar catálogo padrão** para começar com os 4 produtos e as 27 estampas.
+```bash
+cd server
+```
+```bash
+npm install
+```
+```bash
+cp .env.example .env
+```
+
+Edite `server/.env`: em `DATABASE_URL`, aponte para o seu banco; para desenvolvimento, use `NODE_ENV=development` e `DATABASE_SSL=false`. Depois:
+
+```bash
+npm run seed
+```
+```bash
+npm run create-admin -- voce@loja.com.br
+```
+```bash
+npm run dev
+```
+
+Abra `http://localhost:3000` (loja) e `http://localhost:3000/admin.html` (painel).
+
+Com Docker (banco + aplicação):
+
+```bash
+docker compose up -d --build
+```
+```bash
+docker compose exec app node server/src/seed.js
+```
+```bash
+docker compose exec app node server/src/create-admin.js voce@loja.com.br
+```
+
+## Colocar no ar
+
+O GitHub Pages hospeda apenas arquivos: ele **não roda banco de dados nem servidor**. Para a loja funcionar online, publique o servidor (que também entrega o site).
+
+**Opção recomendada: Render** (o arquivo `render.yaml` já está pronto)
+
+1. Em [render.com](https://render.com), vá em **New → Blueprint** e selecione este repositório. Ele cria o PostgreSQL e o serviço web.
+2. No **Shell** do serviço, rode `node server/src/seed.js` e depois `node server/src/create-admin.js voce@loja.com.br`.
+3. Acesse a URL do serviço (ex.: `https://studio-personalizado.onrender.com`). A loja fica em `/` e o painel em `/admin.html`.
+4. Configure um domínio próprio com HTTPS no Render, se quiser.
+
+Também funciona em Railway, Fly.io, VPS com Docker, Azure App Service com Azure Database for PostgreSQL, entre outros: basta rodar o `Dockerfile` com as variáveis do `server/.env.example`.
+
+**Manter a loja no GitHub Pages (opcional)**
+
+1. No GitHub, abra **Settings → Secrets and variables → Actions → Variables** e crie `STUDIO_API_BASE` com a URL do servidor.
+2. No servidor, coloque `https://mateus-r-sampaio.github.io` em `ALLOWED_ORIGINS`.
+3. A loja no Pages passa a usar a API. O painel admin sempre redireciona para o domínio do servidor, porque o cookie de sessão é `SameSite=Strict`.
+
+**Checklist de produção**
+- `NODE_ENV=production`, HTTPS ativo e `IP_HASH_SECRET` aleatório com 32+ caracteres (o servidor se recusa a iniciar sem ele).
+- `DATABASE_SSL=true` se o banco estiver fora da rede interna do provedor.
+- Backups automáticos do PostgreSQL ativados no provedor.
+- Senhas de admin com 12+ caracteres. Para redefinir uma senha esquecida, use `npm run create-admin -- email` no servidor.
 
 ## Notificações (e-mail + WhatsApp/SMS)
 
-As Cloud Functions (`functions/`) disparam automaticamente:
+O próprio servidor envia as mensagens ao criar o pedido e a cada mudança de status. O resultado fica gravado no pedido e aparece no painel, que também tem o botão **Reenviar notificação**.
 
-- **Pedido criado**: confirmação com o número e o status inicial. O servidor também recalcula o total; se o valor enviado pelo navegador for diferente, o pedido recebe o alerta “Conferir valor”.
-- **Mudança de status no Kanban**: aviso com o novo status.
-- **“Reenviar notificação”** no painel: envia de novo.
+| Canal | Variável | Opções |
+| --- | --- | --- |
+| E-mail | `EMAIL_PROVIDER` | `resend`, `sendgrid`, `smtp`, `none` |
+| Mensagem | `MESSAGE_PROVIDER` | `whatsapp_cloud` (Meta), `zapi`, `evolution`, `twilio_sms`, `twilio_whatsapp`, `none` |
 
-Os provedores são configurados em `functions/.env` (veja `.env.example`):
+Modelo da mensagem: `Olá, {{cliente_nome}}! Seu pedido *#{{codigo_curto}}* está com o status: *{{status_label}}*.`
 
-| Canal | Opções |
-| --- | --- |
-| E-mail | `resend`, `sendgrid`, `smtp` |
-| Mensagem | `whatsapp_cloud` (Meta), `zapi`, `evolution`, `twilio_sms`, `twilio_whatsapp` |
+As chaves dos provedores ficam **só** nas variáveis de ambiente do servidor, nunca no navegador nem no banco.
 
-O modelo da mensagem segue a especificação: `Olá, {{cliente_nome}}! Seu pedido *#{{codigo_curto}}* está com o status: *{{status_label}}*.`
-
-O resultado de cada envio, ou o erro, fica registrado em `orders/{id}.notificacoes` e aparece no painel.
-
-**Webhook de pagamento:** `paymentWebhook` recebe `POST { numero_pedido, status: "PAGO" }` com o header `x-webhook-secret`. Adapte o mapeamento ao seu gateway (Mercado Pago, Asaas, Stripe…). Ao confirmar o pagamento, o pedido vai para a fila e o cliente é avisado.
+**Webhook de pagamento:** `POST /api/webhooks/payment` com o header `x-webhook-secret: <PAYMENT_WEBHOOK_SECRET>` e o corpo `{ "numero_pedido": "...", "status": "PAGO" }`. Ao confirmar o pagamento, o pedido vai para a fila e o cliente é avisado.
 
 ## Logo do cliente
 
-No editor, a seção **Sua logo** aceita PNG, JPG, WebP ou SVG (até 10 MB) em qualquer produto e em cada lado (frente e costas). A imagem é reduzida no navegador e pode ter o fundo branco removido. Depois, a logo é posicionada, redimensionada e girada como uma estampa, sempre dentro da área de impressão. A estampa, a logo e o texto podem ser usados juntos.
-
-No modo nuvem, as logos são enviadas ao Firebase Storage (`customer-logos/`) só ao confirmar o pedido. As regras permitem esse envio sem login, mas apenas de imagens. No painel, a ficha do pedido mostra a logo com as medidas em cm e o link para baixar o arquivo.
+A seção **Sua logo** aceita PNG, JPG, WebP ou SVG (o SVG é convertido no navegador) de até 10 MB, em qualquer produto e em cada lado. A imagem é enviada na hora ao servidor, que confere o formato real, regrava o arquivo e devolve a área visível e um token de posse. Logos nunca usadas em pedidos são apagadas automaticamente após 48 horas.
 
 ## Tipografias
 
-São 137 fontes de **5 bancos diferentes**, carregadas sob demanda (só baixam quando aparecem na tela):
-
-| Banco | Exemplos |
-| --- | --- |
-| Google Fonts (85) | As 15 originais (Montserrat, Poppins, Playfair Display, Bebas Neue, Lobster, Pacifico…) e mais Cinzel, Bangers, Satisfy, Amatic SC, Press Start 2P, Orbitron… |
-| Fontshare / ITF (16) | Satoshi, Clash Display, General Sans, Cabinet Grotesk, Boska, Zodiak, Tanker, Panchang… |
-| Bunny Fonts (14) | Inter, Josefin Sans, Sora, Teko, Kalam, Exo 2, Chakra Petch… |
-| Fontsource / jsDelivr (13) | Bricolage Grotesque, Syne, Unbounded, Climate Crisis, Young Serif, Silkscreen… |
-| Sistema (9) | Arial, Georgia, Impact, Comic Sans MS, Courier New… |
-
-Mais as **fontes próprias da loja**: no painel, aba *Tipografias*, é possível enviar `.woff2/.woff/.ttf/.otf`, ativar ou desativar qualquer fonte do catálogo e definir a fonte padrão.
-
-O seletor do cliente tem busca e filtros por estilo (sem serifa, serifada, display, caligrafia, manuscrita, mono, retrô) e por banco de fontes. Cada pedido grava a fonte, o banco de origem, a cor, o negrito/itálico, o tamanho em cm/pt e as dimensões do texto.
+São 137 fontes de 5 bancos, carregadas sob demanda: Google Fonts (85), Fontshare (16), Bunny Fonts (14), Fontsource (13) e fontes do sistema (9). Além delas, a loja pode enviar fontes próprias pelo painel. O admin escolhe quais fontes ficam disponíveis e qual é a padrão; o servidor só aceita pedidos com fontes habilitadas.
 
 ## Estrutura
 
 ```
-index.html            Loja / totem (6 etapas)
-admin.html            Painel administrativo
-styles.css            Estilos base, loja e componentes compartilhados
-admin.css             Estilos do painel
-js/app.js             Lógica da loja (estado unificado por lado, editor, carrinho, checkout)
-js/admin.js           Lógica do painel
-js/store.js           Camada de dados: modo local ou Firebase (Auth, Firestore, Storage)
-js/render.js          Prévia do produto e geometria em cm (editor, carrinho e painel)
-js/fonts.js           Banco de tipografias e carregamento sob demanda
-js/pix.js             Pix copia-e-cola (BR Code) + QR Code
-js/keyboard.js        Teclado virtual do totem
-js/defaults.js        Catálogo e configurações padrão
-js/vendor/qrcode.js   qrcode-generator 1.4.4 (MIT), embutido para funcionar offline
-sw.js, manifest.json  PWA (network-first para o site, cache-first para fontes/CDNs)
-img/                  Mockups (SVG tingíveis) e 27 estampas de exemplo
-functions/            Cloud Functions (notificações, conferência de valores, webhook)
-firestore.rules       Regras: catálogo público, pedidos só para admin
-storage.rules         Uploads só para admin
-tools/generate-assets.mjs  Gera os mockups e estampas de exemplo
-```
-
-Os mockups e estampas em `img/` são substitutos em SVG. Troque pelas imagens reais pelo painel (*Catálogo & Mockups* e *Estampas*). Para colorir automaticamente, use o produto **em branco/cinza claro com fundo transparente**.
-
-## O que foi corrigido em relação à versão anterior
-
-- **Pedido com vários itens:** o pedido agora é montado só a partir do array `itens`. Cada item tem frente e costas, medidas em cm, acabamento e preço. Não há mais campos de item único na raiz do pedido.
-- **Estado do editor unificado:** `state.sides = { front, back }`, com `getActiveSideState()`.
-- **Limites físicos reais:** a estampa e o texto não saem da área de impressão nem ultrapassam `printCm` ao arrastar, redimensionar, girar ou digitar.
-- **Acessibilidade:** o zoom foi liberado (sem `user-scalable=no`), há navegação por teclado no editor (setas, +/−, Delete) e foco visível.
-- **Persistência em nuvem:** Firebase opcional, com fallback offline.
-- **Cor do produto:** agora tinge o mockup de verdade (máscara CSS + `multiply`).
-
-## Testes
-
-```bash
-cd functions && npm test
+index.html, admin.html, styles.css, admin.css   Site (loja e painel)
+js/app.js, js/admin.js                          Lógica da loja e do painel
+js/store.js, js/config.js                       Cliente da API (endereço do servidor)
+js/render.js, js/fonts.js, js/pix.js …          Prévia em cm, tipografias, Pix (compartilhados com o servidor)
+server/src/app.js                               Rotas da API e entrega do site
+server/src/orders.js                            Validação de pedidos contra o banco
+server/src/auth.js, security.js                 Login, sessões, CSRF, limites, cabeçalhos
+server/src/files.js                             Upload e entrega de arquivos
+server/src/notify.js                            E-mail e WhatsApp/SMS
+server/migrations/*.sql                         Esquema do PostgreSQL
+server/test/                                    Testes de segurança e regras
+Dockerfile, docker-compose.yml, render.yaml      Implantação
 ```

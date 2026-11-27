@@ -1,0 +1,41 @@
+# Ambiente completo local (ou em um servidor próprio): PostgreSQL + aplicação.
+# 1) Crie um arquivo .env ao lado deste com POSTGRES_PASSWORD e IP_HASH_SECRET.
+# 2) docker compose up -d --build
+# 3) docker compose exec app node server/src/seed.js
+# 4) docker compose exec app node server/src/create-admin.js voce@loja.com.br
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: studio
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d studio"]
+      interval: 5s
+      retries: 10
+    # Banco sem porta exposta: só a aplicação acessa.
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://studio:${POSTGRES_PASSWORD}@db:5432/studio
+      DATABASE_SSL: "false"
+      IP_HASH_SECRET: ${IP_HASH_SECRET:?defina IP_HASH_SECRET no .env}
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-none}
+      MESSAGE_PROVIDER: ${MESSAGE_PROVIDER:-none}
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

@@ -1,0 +1,10 @@
+{
+  "name": "studio-personalizado",
+  "private": true,
+  "type": "module",
+  "description": "Site (pasta raiz) + API e banco de dados (pasta server/).",
+  "scripts": {
+    "start": "npm --prefix server start",
+    "test": "npm --prefix server test"
+  }
+}

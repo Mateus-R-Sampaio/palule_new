@@ -268,6 +268,12 @@
           <p class="field-error" data-error-for="modalidade"></p>
         </fieldset>
 
+        <!-- Armadilha para robôs: invisível para pessoas, precisa ficar vazio -->
+        <div class="hp-field" aria-hidden="true">
+          <label for="hpWebsite">Não preencha</label>
+          <input id="hpWebsite" name="website" tabindex="-1" autocomplete="off" data-no-vk />
+        </div>
+
         <div class="form-grid">
           <div class="field span-2">
             <label for="customerName">Nome completo</label>

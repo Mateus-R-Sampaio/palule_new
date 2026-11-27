@@ -1,9 +1,9 @@
 // Service Worker — Studio Personalizado
 // • Arquivos do site: network-first (sempre tenta a versão nova; usa o cache offline).
-// • Fontes, bibliotecas e SDK do Firebase (CDNs): cache-first.
-// • Firestore/Storage/Auth e APIs externas: nunca passam pelo cache.
+// • Fontes (CDNs): cache-first.
+// • API (/api/…): NUNCA passa pelo cache — contém dados de pedidos e sessão.
 
-const VERSION = "studio-personalizado-v3";
+const VERSION = "studio-personalizado-v4";
 const SHELL = [
   "./",
   "index.html",
@@ -21,12 +21,8 @@ const SHELL = [
   "js/defaults.js",
   "js/pix.js",
   "js/keyboard.js",
+  "js/config.js",
   "js/vendor/qrcode.js",
-  "img/Mockups/copo_termico/copo_termico.svg",
-  "img/Mockups/camiseta/camiseta_frente.svg",
-  "img/Mockups/camiseta/camiseta_costas.svg",
-  "img/Mockups/ecobag/ecobag.svg",
-  "img/Mockups/bone/bone.svg",
 ];
 
 const CDN_HOSTS = [
@@ -36,8 +32,6 @@ const CDN_HOSTS = [
   "cdn.fontshare.com",
   "fonts.bunny.net",
   "cdn.jsdelivr.net",
-  "cdnjs.cloudflare.com",
-  "www.gstatic.com",
 ];
 
 self.addEventListener("install", (event) => {
@@ -64,7 +58,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
 
   if (url.origin === self.location.origin) {
-    if (url.pathname.endsWith("/firebase-config.js")) return; // sempre da rede
+    if (url.pathname.includes("/api/")) return; // dados do servidor: nunca em cache
     event.respondWith(networkFirst(request));
     return;
   }

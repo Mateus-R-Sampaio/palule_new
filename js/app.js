@@ -5,8 +5,8 @@ import {
   formatCep, deepClone, toast, isValidEmail, statusLabel, PAYMENT_LABELS, MODE_LABELS, UFS,
   applyBrandColor, registerServiceWorker, debounce,
 } from "./utils.js";
-import { createStore } from "./store.js";
-import { DEFAULT_PRODUCTS, DEFAULT_ARTS, DEFAULT_SETTINGS } from "./defaults.js";
+import { shop } from "./store.js";
+import { DEFAULT_SETTINGS } from "./defaults.js";
 import {
   getAvailableFonts, findFont, loadFont, loadFontForText, fontStack, FONT_CATEGORIES, FONT_SOURCES,
 } from "./fonts.js";
@@ -23,7 +23,7 @@ const MAX_QTY = 50;
 const SS = { cart: "studioCart", customer: "customerDraft" };
 const CATALOG_CACHE = "studioCatalogCache";
 
-let store;
+let serverAvailable = false; // o pedido só é aceito com o servidor (banco) respondendo
 let stage = null; // { root, area, art, text } do editor
 let vk;
 
@@ -128,11 +128,6 @@ function makeSide(product) {
 /* ====================================================================== */
 
 async function boot() {
-  try {
-    store = await createStore();
-  } catch (err) {
-    console.error(err);
-  }
   await loadStoreData();
   applyBranding();
   bindGlobalEvents();
@@ -150,27 +145,21 @@ async function boot() {
 
 async function loadStoreData() {
   try {
-    const [settings, products, arts, customFonts] = await Promise.all([
-      store.getSettings(),
-      store.listProducts(),
-      store.listArts(),
-      store.listCustomFonts(),
-    ]);
-    state.settings = settings;
-    const notConfigured = store.mode === "firebase" && !settings.catalogInitialized && !products.length;
-    state.products = (notConfigured ? DEFAULT_PRODUCTS : products).filter((p) => p.active !== false);
-    state.arts = (notConfigured ? DEFAULT_ARTS : arts).filter((a) => a.active !== false);
+    const { settings, products, arts, customFonts } = await shop.loadCatalog();
+    state.settings = { ...deepClone(DEFAULT_SETTINGS), ...settings };
+    state.products = products;
+    state.arts = arts;
     state.customFonts = customFonts;
+    serverAvailable = true;
     try {
-      localStorage.setItem(
-        CATALOG_CACHE,
-        JSON.stringify({ settings, products: state.products, arts: state.arts, customFonts, at: Date.now() })
-      );
+      // Só para exibir o catálogo se a internet cair; pedidos sempre exigem o servidor.
+      localStorage.setItem(CATALOG_CACHE, JSON.stringify({ settings, products, arts, customFonts, at: Date.now() }));
     } catch {
       /* cache opcional */
     }
   } catch (err) {
-    console.warn("Falha ao carregar a loja; usando cache local.", err);
+    console.warn("Servidor indisponível.", err);
+    serverAvailable = false;
     let cache = null;
     try {
       cache = JSON.parse(localStorage.getItem(CATALOG_CACHE) || "null");
@@ -178,10 +167,16 @@ async function loadStoreData() {
       cache = null;
     }
     state.settings = { ...deepClone(DEFAULT_SETTINGS), ...(cache?.settings || {}) };
-    state.products = cache?.products || DEFAULT_PRODUCTS;
-    state.arts = cache?.arts || DEFAULT_ARTS;
+    state.products = cache?.products || [];
+    state.arts = cache?.arts || [];
     state.customFonts = cache?.customFonts || [];
-    toast("Sem conexão com o servidor: exibindo o catálogo salvo neste dispositivo.", "warning", 5000);
+    toast(
+      cache
+        ? "Sem conexão com o servidor: catálogo salvo exibido, mas pedidos só podem ser confirmados com conexão."
+        : "Não foi possível conectar ao servidor da loja.",
+      "warning",
+      6000
+    );
   }
   state.fonts = getAvailableFonts(state.settings, state.customFonts);
 }
@@ -307,7 +302,10 @@ function renderCatalog() {
   grid.removeAttribute("aria-busy");
   grid.innerHTML = "";
   if (!state.products.length) {
-    grid.innerHTML = `<p class="empty">Nenhum produto disponível no momento.</p>`;
+    grid.innerHTML = serverAvailable
+      ? `<p class="empty">Nenhum produto disponível no momento.</p>`
+      : `<div class="empty"><p>Não foi possível carregar a loja.</p><button type="button" class="btn btn-primary" id="retryLoad">Tentar novamente</button></div>`;
+    $("#retryLoad")?.addEventListener("click", () => location.reload());
     return;
   }
   for (const p of state.products) {
@@ -742,7 +740,11 @@ async function setArt(artId) {
   }
   const art = state.arts.find((a) => a.id === artId);
   if (!art) return;
-  const info = await getArtVisibleBounds(art.url);
+  // Usa a área visível calculada pelo servidor (a mesma que ele usa para validar o pedido)
+  const info =
+    art.bounds && art.width && art.height
+      ? { bounds: art.bounds, aspect: (art.bounds.w * art.width) / (art.bounds.h * art.height) }
+      : await getArtVisibleBounds(art.url);
   const prev = side.art;
   const widthCm = prev ? prev.widthCm : Math.min(pc.width * 0.6, pc.height * 0.6 * info.aspect);
   side.art = {
@@ -824,10 +826,6 @@ const readAsDataUrl = (blob) =>
 async function processLogoFile(file, removeWhite) {
   if (file.size > LOGO_MAX_BYTES) throw new Error("A imagem passa de 10 MB. Envie um arquivo menor.");
   if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) throw new Error("Formato não suportado. Use PNG, JPG, WebP ou SVG.");
-  if (file.type === "image/svg+xml" && !removeWhite) {
-    if (file.size > 600_000) throw new Error("SVG muito grande (máx. 600 KB).");
-    return readAsDataUrl(file);
-  }
   const img = await loadImageFromFile(file);
   const natW = img.naturalWidth || 800;
   const natH = img.naturalHeight || 800;
@@ -847,10 +845,9 @@ async function processLogoFile(file, removeWhite) {
     }
     ctx.putImageData(data, 0, 0);
   }
-  const blob =
-    (await new Promise((r) => canvas.toBlob(r, "image/webp", 0.92))) ||
-    (await new Promise((r) => canvas.toBlob(r, "image/png")));
-  return readAsDataUrl(blob);
+  const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+  if (!blob) throw new Error("Não foi possível processar a imagem.");
+  return { blob, dataUrl: await readAsDataUrl(blob) };
 }
 
 async function setLogoFromFile(file) {
@@ -858,8 +855,12 @@ async function setLogoFromFile(file) {
   label.textContent = "Processando…";
   $("#logoPickLabel").classList.add("is-loading");
   try {
-    const url = await processLogoFile(file, $("#logoRemoveWhite").checked);
-    const info = await getArtVisibleBounds(url);
+    const { blob, dataUrl: url } = await processLogoFile(file, $("#logoRemoveWhite").checked);
+    // Envia já ao servidor: ele confere o formato real, regrava a imagem e devolve
+    // a área visível + um token que prova que este cliente fez o envio.
+    label.textContent = "Enviando…";
+    const up = await shop.uploadCustomerLogo(blob, "logo.png");
+    const info = { bounds: up.bounds, aspect: (up.bounds.w * up.width) / (up.bounds.h * up.height) };
     const side = getActiveSideState();
     const pc = getPrintCm(state.product);
     const prev = side.logo;
@@ -868,6 +869,8 @@ async function setLogoFromFile(file) {
       url,
       aspect: info.aspect,
       bounds: info.bounds,
+      fileId: up.fileId,
+      token: up.token,
       widthCm: prev ? prev.widthCm : Math.min(pc.width * 0.45, pc.height * 0.45 * info.aspect),
       x: prev?.x || 0,
       y: prev?.y || 0,
@@ -1635,7 +1638,7 @@ function renderCheckoutSummary() {
 
 function updateOnlineState() {
   const offline = navigator.onLine === false;
-  const degraded = !!store?.degraded;
+  const degraded = !serverAvailable;
   const notice = $("#offlineNotice");
   notice.hidden = !offline && !degraded;
   notice.textContent = degraded
@@ -1653,10 +1656,33 @@ function bindCheckoutEvents() {
   bindFontPicker();
 }
 
-function buildOrderData() {
+const r3 = (v) => Math.round((Number(v) || 0) * 1000) / 1000;
+const place = (o) => ({ x: r3(o.x), y: r3(o.y), rotation: r3(((o.rotation || 0) % 360 + 360) % 360) });
+
+/** Converte um lado do editor no formato aceito pela API (só escolhas; o servidor monta o resto). */
+function sideToApi(side) {
+  if (!sideHasContent(side)) return null;
+  return {
+    art: side.art ? { id: side.art.id, widthCm: r3(side.art.widthCm), ...place(side.art) } : null,
+    logo: side.logo
+      ? { fileId: side.logo.fileId, token: side.logo.token, widthCm: r3(side.logo.widthCm), ...place(side.logo) }
+      : null,
+    text: side.text?.value?.trim()
+      ? {
+          value: side.text.value,
+          fontId: side.text.fontId,
+          color: side.text.color,
+          sizeCm: r3(side.text.sizeCm),
+          bold: !!side.text.bold,
+          italic: !!side.text.italic,
+          ...place(side.text),
+        }
+      : null,
+  };
+}
+
+function buildOrderPayload() {
   const c = state.customer;
-  const now = new Date().toISOString();
-  const initialStatus = state.payment === "PAGAR_NA_RETIRADA" ? "EM_FILA" : "AGUARDANDO_PAGAMENTO";
   return {
     modalidade: c.modalidade,
     cliente: {
@@ -1666,7 +1692,7 @@ function buildOrderData() {
       endereco:
         c.modalidade === "ENCOMENDA"
           ? {
-              cep: formatCep(c.endereco.cep),
+              cep: c.endereco.cep,
               rua: c.endereco.rua.trim(),
               numero: c.endereco.numero.trim(),
               complemento: c.endereco.complemento.trim(),
@@ -1676,41 +1702,24 @@ function buildOrderData() {
             }
           : null,
     },
-    // Pedido baseado 100% no array de itens (corrige o bug multi-item)
-    itens: state.cart.map(({ sides, ...item }) => item),
-    quantidade_itens: state.cart.reduce((n, i) => n + (i.quantidade || 1), 0),
-    subtotal: round(cartSubtotal()),
-    taxa_entrega: round(deliveryFee()),
-    valor_total: round(cartTotal()),
+    // Preços, total, status e número do pedido são definidos pelo servidor.
+    itens: state.cart.map((item) => ({
+      produto_id: item.produto_id,
+      cor: item.cor,
+      tamanho: item.tamanho,
+      acabamento: item.acabamento,
+      quantidade: item.quantidade || 1,
+      frente: sideToApi(item.sides?.front),
+      costas: item.sides?.back ? sideToApi(item.sides.back) : null,
+    })),
     metodo_pagamento: state.payment,
-    status_pagamento: "PENDENTE",
-    status_producao: initialStatus,
-    historico: [{ status: initialStatus, em: now }],
-    notificacoes: { email_enviado: false, mensagem_enviada: false, ultimo_disparo_em: null },
     origem: state.settings.kioskMode ? "totem" : "web",
-    created_at: now,
-    updated_at: now,
+    website: $("#hpWebsite")?.value || "",
   };
 }
 
-/** No modo nuvem, envia as logos dos clientes ao Storage e troca o data URL pelo link do arquivo. */
-async function uploadCustomerLogos(itens) {
-  if (typeof store.uploadDataUrl !== "function") return;
-  const uploaded = new Map();
-  for (const item of itens) {
-    for (const key of ["frente", "costas"]) {
-      const side = item[key];
-      if (!side?.logo_url?.startsWith("data:")) continue;
-      if (!uploaded.has(side.logo_url)) {
-        uploaded.set(side.logo_url, await store.uploadDataUrl(side.logo_url, { folder: "customer-logos", name: side.logo_nome }));
-      }
-      side.logo_url = uploaded.get(side.logo_url);
-    }
-  }
-}
-
 async function placeOrder() {
-  if (navigator.onLine === false || store?.degraded) return updateOnlineState();
+  if (navigator.onLine === false || !serverAvailable) return updateOnlineState();
   if (!state.payment) {
     toast("Escolha um método de pagamento.", "error");
     $("#paymentOptions input")?.focus();
@@ -1722,9 +1731,7 @@ async function placeOrder() {
   btn.classList.add("is-loading");
   btn.textContent = "Enviando pedido…";
   try {
-    const data = buildOrderData();
-    await uploadCustomerLogos(data.itens);
-    state.lastOrder = await store.createOrder(data);
+    state.lastOrder = await shop.createOrder(buildOrderPayload());
     state.cart = [];
     saveCart();
     state.customer = emptyCustomer();
@@ -1732,7 +1739,7 @@ async function placeOrder() {
     goTo("success", { force: true });
   } catch (err) {
     console.error(err);
-    toast(`Não foi possível registrar o pedido. ${err.message || "Tente novamente."}`, "error", 6000);
+    toast(`Não foi possível registrar o pedido: ${err.message || "tente novamente."}`, "error", 7000);
   } finally {
     btn.disabled = false;
     btn.classList.remove("is-loading");
@@ -1756,9 +1763,9 @@ async function renderSuccess() {
   $("#successMode").textContent = MODE_LABELS[o.modalidade] || "—";
   $("#successTotal").textContent = formatBRL(o.valor_total);
   $("#successNotice").textContent =
-    store.mode === "firebase"
+    state.settings.notificationsEnabled
       ? `Enviamos o número do pedido e o status para o seu WhatsApp e e-mail (${o.cliente.email}). Você receberá novas mensagens a cada atualização.`
-      : "Modo demonstração: o pedido foi salvo neste dispositivo e as mensagens automáticas por WhatsApp/e-mail não são enviadas.";
+      : "Pedido registrado! A loja vai avisar você sobre o andamento pelo WhatsApp informado.";
 
   const pix = state.settings.pix || {};
   const pixBox = $("#pixBox");

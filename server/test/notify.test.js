@@ -1,6 +1,6 @@
-const { test } = require("node:test");
-const assert = require("node:assert");
-const { buildMessageText, buildEmail, phoneE164, statusLabel } = require("../notify");
+import { test } from "node:test";
+import assert from "node:assert";
+import { buildMessageText, buildEmail, phoneE164, statusLabel } from "../src/notify.js";
 
 const order = {
   numero_pedido: "PED-20261126-1042",

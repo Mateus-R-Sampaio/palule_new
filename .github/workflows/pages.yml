@@ -27,9 +27,15 @@ jobs:
       - name: Montar a pasta do site
         run: |
           mkdir -p _site
-          cp -r index.html admin.html styles.css admin.css manifest.json sw.js icon.svg js img _site/
-          if [ -f firebase-config.js ]; then cp firebase-config.js _site/; fi
+          cp -r index.html admin.html styles.css admin.css manifest.json sw.js icon.svg js _site/
+          # A loja do Pages conversa com o servidor (API + banco). Defina a variável do
+          # repositório STUDIO_API_BASE (Settings → Secrets and variables → Actions → Variables).
+          if [ -n "$STUDIO_API_BASE" ]; then
+            printf 'export const API_BASE = "%s";\n' "$STUDIO_API_BASE" > _site/js/config.js
+          fi
           touch _site/.nojekyll
+        env:
+          STUDIO_API_BASE: ${{ vars.STUDIO_API_BASE }}
 
       - uses: actions/configure-pages@v5
         with:
