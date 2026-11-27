@@ -1,0 +1,9 @@
+# Arquivos que NÃO são enviados ao Google ao publicar (gcloud run deploy --source .)
+.git
+.github
+**/node_modules
+server/.env
+.env
+server/test
+tools
+*.zip
